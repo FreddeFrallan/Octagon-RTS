@@ -75,6 +75,16 @@
               <span id="slot-guest-name">Waiting for player...</span>
             </div>
           </div>
+
+          <div class="map-option-panel">
+            <div class="form-group">
+              <label for="map-mode-select">Map</label>
+              <select id="map-mode-select" class="text-input">
+                <option value="standard">StandardMap</option>
+                <option value="random">RandomMap</option>
+              </select>
+            </div>
+          </div>
           
           <button id="btn-start-game" class="btn btn-green" style="width:100%;" disabled>Start Match</button>
         </div>
@@ -95,6 +105,13 @@
             <div class="player-slot occupied p2">
               <span>🔴 Magenta Empire (Guest):</span>
               <span id="guest-slot-guest">Connected</span>
+            </div>
+          </div>
+
+          <div class="map-option-panel">
+            <div class="player-slot occupied">
+              <span>Map:</span>
+              <span id="guest-map-mode">StandardMap</span>
             </div>
           </div>
           

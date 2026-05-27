@@ -2,7 +2,14 @@ import uuid
 import urllib.parse
 
 from models import Room
+from map_generator import generate_random_map, initalize_map
 from state import ROOMS, state_lock
+
+
+MAP_MODES = {
+  "standard": "StandardMap",
+  "random": "RandomMap"
+}
 
 
 def get_rooms():
@@ -12,6 +19,7 @@ def get_rooms():
       rooms_list.append({
         "id": rid,
         "status": room.status,
+        "mapMode": room.map_mode,
         "players": {
           "1": room.players[1]["name"],
           "2": room.players[2]["name"]
@@ -97,7 +105,40 @@ def start_room(data):
     if player_id != 1:
       return None, "Only Host can start game"
 
+    try:
+      if room.map_mode == "random":
+        room.apply_map(generate_random_map())
+      else:
+        room.apply_map(initalize_map())
+    except ValueError as e:
+      return None, str(e)
+
     room.status = "playing"
     room.log("Game started! Real-time combat initialized.")
 
   return {"success": True}, None
+
+
+def set_room_map(data):
+  room_id = data.get("roomId")
+  player_id = data.get("playerId")
+  map_mode = data.get("mapMode", "standard")
+
+  if map_mode not in MAP_MODES:
+    return None, "Unknown map mode"
+
+  with state_lock:
+    if room_id not in ROOMS:
+      return None, "Room not found"
+
+    room = ROOMS[room_id]
+    if room.status != "lobby":
+      return None, "Map cannot be changed after the match starts"
+    if player_id != 1:
+      return None, "Only Host can change map"
+
+    room.map_mode = map_mode
+    room.map_name = MAP_MODES[map_mode]
+    room.log(f"Map set to {MAP_MODES[map_mode]}.")
+
+  return {"success": True, "mapMode": map_mode, "mapName": MAP_MODES[map_mode]}, None

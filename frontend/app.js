@@ -61,6 +61,7 @@ const inputPlayerName = document.getElementById('player-name');
 const inputServerIp = document.getElementById('server-ip');
 const inputRoomCode = document.getElementById('room-code');
 const inputBotUrl = document.getElementById('bot-url');
+const mapModeSelect = document.getElementById('map-mode-select');
 
 // Buttons
 const btnHostLobby = document.getElementById('btn-host-lobby');
@@ -78,6 +79,7 @@ const slotGuestName = document.getElementById('slot-guest-name');
 const guestRoomCode = document.getElementById('guest-room-code');
 const guestSlotHost = document.getElementById('guest-slot-host');
 const guestSlotGuest = document.getElementById('guest-slot-guest');
+const guestMapMode = document.getElementById('guest-map-mode');
 
 // HUD Displays
 const activePlayerIndicator = document.getElementById('active-player-indicator');
@@ -116,6 +118,7 @@ function init() {
   btnStartGame.addEventListener('click', handleStartGame);
   btnConnectBot.addEventListener('click', handleConnectBot);
   btnDisconnectBot.addEventListener('click', handleDisconnectBot);
+  mapModeSelect.addEventListener('change', handleMapModeChange);
 
   // Bind instructions modal
   closeInstructionsBtn.addEventListener('click', () => instructionsModal.classList.add('hidden'));
@@ -356,12 +359,42 @@ async function handleStartGame() {
   }
 }
 
+function mapModeLabel(mapMode) {
+  return mapMode === 'random' ? 'RandomMap' : 'StandardMap';
+}
+
+async function handleMapModeChange() {
+  if (!roomId || playerId !== 1) return;
+
+  try {
+    const res = await fetch(`${apiBase}/api/map`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        roomId,
+        playerId,
+        mapMode: mapModeSelect.value
+      })
+    });
+
+    if (!res.ok) {
+      const errData = await res.json();
+      throw new Error(errData.error || "Failed to update map");
+    }
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
 // Polling while waiting inside the room lobby
 async function pollLobbyState() {
   try {
     const res = await fetch(`${apiBase}/api/state?roomId=${roomId}&playerId=${playerId}`);
     if (!res.ok) return;
     const data = await res.json();
+    const currentMapMode = data.mapMode || 'standard';
+    mapModeSelect.value = currentMapMode;
+    guestMapMode.innerText = mapModeLabel(currentMapMode);
 
     if (playerId === 1) {
       // Host: check if player 2 joined

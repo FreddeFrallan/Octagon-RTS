@@ -88,7 +88,8 @@ def build_unit(room, player_id, args):
   if player["baseHp"] <= 0:
     return False, "Base is destroyed"
 
-  bx, bz = (0, 0) if player_id == 1 else (7, 7)
+  base_pos = player["basePos"]
+  bx, bz = base_pos["x"], base_pos["z"]
   spawn_spots = []
   for tx, tz in get_neighbors(bx, bz, room.grid_size):
     if room.grid[tx][tz].type != 'base':

@@ -3,8 +3,9 @@ from simulation.combat import is_attack_ready
 
 
 def update_base_attacks(room, now_ms):
-  for base_owner, base_pos in [(1, (0, 0)), (2, (7, 7))]:
-    bx, bz = base_pos
+  for base_owner, player in room.players.items():
+    base_pos = player["basePos"]
+    bx, bz = base_pos["x"], base_pos["z"]
     base_player = room.players[base_owner]
     if base_player["baseHp"] <= 0:
       continue

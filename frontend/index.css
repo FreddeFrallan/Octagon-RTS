@@ -418,6 +418,14 @@ body {
   color: var(--neon-magenta);
 }
 
+.map-option-panel {
+  margin: 16px 0 20px;
+}
+
+select.text-input {
+  cursor: pointer;
+}
+
 .lobby-divider {
   display: flex;
   align-items: center;

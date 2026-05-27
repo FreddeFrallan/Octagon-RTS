@@ -1,6 +1,7 @@
 import time
 
 from config import UNITS_CONFIG
+from map_generator import initalize_map
 
 
 class Unit:
@@ -83,43 +84,59 @@ class Cell:
 
 
 class Room:
-  def __init__(self, room_id):
+  def __init__(self, room_id, map_data=None, map_mode="standard"):
+    map_data = map_data or initalize_map()
     self.id = room_id
+    self.map_mode = map_mode
     self.status = "lobby"
-    self.players = {
-      1: {"name": None, "crystals": 100, "baseHp": 100, "maxBaseHp": 100, "basePos": {"x": 0, "z": 0}},
-      2: {"name": None, "crystals": 100, "baseHp": 100, "maxBaseHp": 100, "basePos": {"x": 7, "z": 7}}
-    }
+    self.players = {}
     self.winner = None
-    self.grid_size = 8
+    self.event_queues = {1: [], 2: []}
+    self.pending_artillery_impacts = []
+    self.logs = []
+    self.unit_counter = 0
+    self.apply_map(map_data)
+    self.log("Room created.")
+
+  def apply_map(self, map_data):
+    existing_names = {
+      player_id: player.get("name")
+      for player_id, player in getattr(self, "players", {}).items()
+    }
+
+    self.map_name = map_data.get("name", "Untitled Map")
+    self.players = {}
+    for player_id, player_config in map_data.get("players", {}).items():
+      player_id = int(player_id)
+      self.players[player_id] = {
+        "name": existing_names.get(player_id),
+        "crystals": player_config.get("startingCrystals", 100),
+        "baseHp": player_config.get("baseHp", 100),
+        "maxBaseHp": player_config.get("maxBaseHp", player_config.get("baseHp", 100)),
+        "basePos": player_config.get("basePos", {"x": 0, "z": 0})
+      }
+    self.winner = None
+    self.grid_size = map_data.get("gridSize", 8)
 
     self.grid = [[Cell(x, z) for z in range(self.grid_size)] for x in range(self.grid_size)]
-    self.grid[0][0].type = 'base'
-    self.grid[0][0].owner = 1
-    self.grid[7][7].type = 'base'
-    self.grid[7][7].owner = 2
+    for player_id, player in self.players.items():
+      base_pos = player["basePos"]
+      cell = self.grid[base_pos["x"]][base_pos["z"]]
+      cell.type = 'base'
+      cell.owner = player_id
 
-    resource_locations = [
-      (2, 2), (5, 5), (2, 5), (5, 2),
-      (0, 4), (4, 0), (7, 3), (3, 7)
-    ]
-    for rx, rz in resource_locations:
-      cell = self.grid[rx][rz]
+    for resource in map_data.get("resources", []):
+      cell = self.grid[resource["x"]][resource["z"]]
       cell.type = 'resource'
-      cell.gold = 200
-      cell.maxGold = 200
+      cell.gold = resource.get("gold", 200)
+      cell.maxGold = resource.get("maxGold", cell.gold)
 
     self.units = {}
     self.unit_counter = 0
 
-    self.spawn_unit("worker", 1, 1, 0)
-    self.spawn_unit("worker", 2, 6, 7)
-
-    self.event_queues = {1: [], 2: []}
+    for unit in map_data.get("startingUnits", []):
+      self.spawn_unit(unit["type"], unit["owner"], unit["x"], unit["z"])
     self.pending_artillery_impacts = []
-
-    self.logs = []
-    self.log("Room created.")
 
   def generate_unit_id(self):
     self.unit_counter += 1
@@ -144,6 +161,8 @@ class Room:
   def to_dict(self, player_id):
     return {
       "roomId": self.id,
+      "mapName": self.map_name,
+      "mapMode": self.map_mode,
       "status": self.status,
       "winner": self.winner,
       "players": {str(k): v for k, v in self.players.items()},

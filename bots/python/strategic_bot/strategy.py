@@ -439,7 +439,7 @@ class StrategicBot:
     grid = state["grid"]
     return [
       (nx, nz) for nx, nz in neighbors(x, z, state["gridSize"])
-      if grid[nx][nz]["type"] != "base"
+      if grid[nx][nz]["type"] not in ("base", "obstacle")
     ]
 
   def nearest_enemy_distance(self, x, z, enemies):

@@ -55,8 +55,8 @@ def move_units(room, player_id, args):
     if (tx, tz) not in neighbors:
       return False, "Invalid coordinate target"
 
-    if room.grid[tx][tz].type == 'base':
-      return False, "Cannot enter building structures"
+    if room.grid[tx][tz].type in ('base', 'obstacle'):
+      return False, "Cannot enter blocked terrain"
 
   now_ms = int(time.time() * 1000)
   for uid in unit_ids:
@@ -92,7 +92,7 @@ def build_unit(room, player_id, args):
   bx, bz = base_pos["x"], base_pos["z"]
   spawn_spots = []
   for tx, tz in get_neighbors(bx, bz, room.grid_size):
-    if room.grid[tx][tz].type != 'base':
+    if room.grid[tx][tz].type not in ('base', 'obstacle'):
       spawn_spots.append((tx, tz))
 
   if not spawn_spots:

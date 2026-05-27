@@ -119,6 +119,10 @@ class Room:
     self.grid_size = map_data.get("gridSize", 8)
 
     self.grid = [[Cell(x, z) for z in range(self.grid_size)] for x in range(self.grid_size)]
+    for obstacle in map_data.get("obstacles", []):
+      cell = self.grid[obstacle["x"]][obstacle["z"]]
+      cell.type = 'obstacle'
+
     for player_id, player in self.players.items():
       base_pos = player["basePos"]
       cell = self.grid[base_pos["x"]][base_pos["z"]]

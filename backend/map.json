@@ -1,5 +1,6 @@
 {
   "gridSize": [8, 8],
   "numResources": 8,
+  "numObsticale": 6,
   "randomPlayer": false
 }

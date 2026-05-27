@@ -70,7 +70,7 @@ export class GameCell {
   constructor(x, z) {
     this.x = x;
     this.z = z;
-    this.type = 'normal'; // 'normal', 'base', 'resource'
+    this.type = 'normal'; // 'normal', 'base', 'resource', 'obstacle'
     this.owner = 0; // 0: neutral, 1: P1, 2: P2
     this.gold = 0;
     this.maxGold = 0;

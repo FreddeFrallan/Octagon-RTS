@@ -749,9 +749,10 @@ function onCanvasMouseMove(e) {
       const isAdjacentToSelect = game.selectedCell && getHexDistance(game.selectedCell.x, game.selectedCell.z, lastHovered.x, lastHovered.z) === 1;
       const isAttackRange = game.selectedCell && getHexDistance(game.selectedCell.x, game.selectedCell.z, lastHovered.x, lastHovered.z) >= (artConfig.minRange ?? 1) && getHexDistance(game.selectedCell.x, game.selectedCell.z, lastHovered.x, lastHovered.z) <= (artConfig.maxRange ?? 2);
       
-      const isBase = game.getCell(lastHovered.x, lastHovered.z).type === 'base';
+      const lastCell = game.getCell(lastHovered.x, lastHovered.z);
+      const isBlocked = lastCell.type === 'base' || lastCell.type === 'obstacle';
 
-      if (!isSelected && !(isMoveMode && isAdjacentToSelect && !isBase) && !(isAttackMode && isAttackRange)) {
+      if (!isSelected && !(isMoveMode && isAdjacentToSelect && !isBlocked) && !(isAttackMode && isAttackRange)) {
         renderer.resetTileOutlineColor(lastHovered.x, lastHovered.z);
       }
     }
@@ -761,9 +762,10 @@ function onCanvasMouseMove(e) {
       const isAdjacentToSelect = game.selectedCell && getHexDistance(game.selectedCell.x, game.selectedCell.z, hovered.x, hovered.z) === 1;
       const isAttackRange = game.selectedCell && getHexDistance(game.selectedCell.x, game.selectedCell.z, hovered.x, hovered.z) >= (artConfig.minRange ?? 1) && getHexDistance(game.selectedCell.x, game.selectedCell.z, hovered.x, hovered.z) <= (artConfig.maxRange ?? 2);
       
-      const isBase = game.getCell(hovered.x, hovered.z).type === 'base';
+      const hoveredCell = game.getCell(hovered.x, hovered.z);
+      const isBlocked = hoveredCell.type === 'base' || hoveredCell.type === 'obstacle';
 
-      if (!isSelected && !(isMoveMode && isAdjacentToSelect && !isBase) && !(isAttackMode && isAttackRange)) {
+      if (!isSelected && !(isMoveMode && isAdjacentToSelect && !isBlocked) && !(isAttackMode && isAttackRange)) {
         renderer.setTileOutlineColor(hovered.x, hovered.z, new THREE.Color(0xffffff));
       }
     }
@@ -855,6 +857,8 @@ function updateHUD() {
     } else if (cell.type === 'resource') {
       selectionName.innerText = 'Gold Resource Node';
       selectionCoord.innerText += ` • Resource Volume: ${cell.gold}🪙`;
+    } else if (cell.type === 'obstacle') {
+      selectionName.innerText = 'Water';
     } else {
       selectionName.innerText = 'Neutral Grid Cell';
     }

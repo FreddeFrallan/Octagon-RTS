@@ -157,6 +157,11 @@ export class GameRenderer {
         const cell = this.game.grid[x][z];
         const pos = this.gridToWorld(x, z);
 
+        if (cell.type === 'obstacle') {
+          this.tileMeshes[x][z] = null;
+          continue;
+        }
+
         const tileGroup = new THREE.Group();
         tileGroup.position.set(pos.x, 0, pos.z);
 
@@ -496,6 +501,8 @@ export class GameRenderer {
       color.copy(new THREE.Color(this.game.players[cell.owner].color));
     } else if (cell.type === 'resource') {
       color.copy(new THREE.Color(0xffaa00));
+    } else if (cell.type === 'obstacle') {
+      color.copy(new THREE.Color(0x4499dd));
     }
 
     this.setTileOutlineColor(x, z, color);
@@ -506,7 +513,7 @@ export class GameRenderer {
     const neighbors = getHexNeighbors(centerX, centerZ, this.game.gridSize);
     for (const n of neighbors) {
       const cell = this.game.getCell(n.x, n.z);
-      if (cell && cell.type !== 'base') {
+      if (cell && cell.type !== 'base' && cell.type !== 'obstacle') {
         if (enable) {
           this.setTileOutlineColor(n.x, n.z, new THREE.Color(0x39ff14));
         } else {

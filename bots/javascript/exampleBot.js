@@ -81,7 +81,7 @@ function pickWorkerMove(state) {
 
   const worker = workers[0];
   for (const [nx, nz] of neighbors(worker.x, worker.z, state.gridSize)) {
-    if (state.grid[nx][nz].type !== 'base') {
+    if (state.grid[nx][nz].type !== 'base' && state.grid[nx][nz].type !== 'obstacle') {
       return { unitId: worker.id, x: nx, z: nz };
     }
   }

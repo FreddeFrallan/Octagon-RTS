@@ -88,7 +88,7 @@ def pick_worker_move(state):
 
   worker = workers[0]
   for nx, nz in neighbors(worker["x"], worker["z"], state["gridSize"]):
-    if grid[nx][nz]["type"] != "base":
+    if grid[nx][nz]["type"] not in ("base", "obstacle"):
       return worker["id"], nx, nz
   return None
 

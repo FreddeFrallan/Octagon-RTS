@@ -159,6 +159,23 @@ class Room:
     self.event_queues[2].append(event)
 
   def to_dict(self, player_id):
+    units = {uid: unit.to_dict() for uid, unit in self.units.items()}
+    for unit_data in units.values():
+      if unit_data["type"] == "artillery":
+        unit_data["attackWillLand"] = None
+
+    for impact in self.pending_artillery_impacts:
+      source_unit_id = impact.get("sourceUnitId")
+      if source_unit_id in units:
+        units[source_unit_id]["attackWillLand"] = {
+          "toX": impact["toX"],
+          "toZ": impact["toZ"],
+          "fireTime": impact["fireTime"],
+          "flightTime": impact["flightTime"],
+          "impactTime": impact["impactTime"],
+          "damage": impact["damage"]
+        }
+
     return {
       "roomId": self.id,
       "mapName": self.map_name,
@@ -168,6 +185,6 @@ class Room:
       "players": {str(k): v for k, v in self.players.items()},
       "gridSize": self.grid_size,
       "grid": [[c.to_dict() for c in row] for row in self.grid],
-      "units": {uid: u.to_dict() for uid, u in self.units.items()},
+      "units": units,
       "logs": self.logs
     }

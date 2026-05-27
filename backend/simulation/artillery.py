@@ -80,10 +80,17 @@ def update_artillery(room, now_ms):
         damage = art_config.get("attack", 16)
         shell_flight_ms = get_artillery_shell_flight_ms()
         room.pending_artillery_impacts.append({
+          "type": "artillery_shell",
+          "owner": unit.owner,
+          "sourceUnitId": unit.id,
+          "fromX": unit.x,
+          "fromZ": unit.z,
           "attackerOwner": unit.owner,
           "toX": tx,
           "toZ": tz,
           "damage": damage,
+          "fireTime": now_ms,
+          "flightTime": shell_flight_ms,
           "impactTime": now_ms + shell_flight_ms
         })
         room.log(f"💥 Artillery fires at [{tx}, {tz}]", "combat")

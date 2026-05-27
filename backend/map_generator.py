@@ -51,7 +51,7 @@ def load_random_map_settings():
     "height": {"target": 8, "min": 6, "max": 12},
     "numResources": {"target": 8, "min": 0, "max": 20},
     "numObsticale": {"target": 6, "min": 0, "max": 20},
-    "randomPlayer": {"target": False, "min": False, "max": True}
+    "randomPlayer": {"target": False, "options": [False, True]}
   }
   try:
     with open(settings_path, "r") as f:
@@ -62,10 +62,51 @@ def load_random_map_settings():
   return {**defaults, **settings}
 
 
+def save_random_map_settings(settings):
+  settings_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "map.json")
+  normalized = validate_random_map_settings(settings)
+  with open(settings_path, "w") as f:
+    json.dump(normalized, f, indent=2)
+    f.write("\n")
+  return normalized
+
+
+def validate_random_map_settings(settings):
+  defaults = load_random_map_settings()
+  normalized = {}
+
+  for key, default_value in defaults.items():
+    value = settings.get(key, default_value)
+    if not isinstance(value, dict):
+      value = {"target": value}
+
+    if "options" in default_value:
+      options = value.get("options", default_value["options"])
+      target = value.get("target", default_value["target"])
+      if target not in options:
+        target = default_value["target"]
+      normalized[key] = {"target": target, "options": options}
+      continue
+
+    min_value = value.get("min", default_value["min"])
+    max_value = value.get("max", default_value["max"])
+    target = value.get("target", default_value["target"])
+    if target < min_value:
+      target = min_value
+    if target > max_value:
+      target = max_value
+    normalized[key] = {"target": target, "min": min_value, "max": max_value}
+
+  return normalized
+
+
 def setting_target(settings, key, fallback=None):
   value = settings.get(key, fallback)
   if isinstance(value, dict):
     target = value.get("target", fallback)
+    options = value.get("options")
+    if options is not None:
+      return target if target in options else options[0]
     min_value = value.get("min")
     max_value = value.get("max")
     if isinstance(target, bool):
@@ -92,8 +133,6 @@ def generate_random_map():
     height = setting_target(settings, "height", 8)
   width = int(width)
   height = int(height)
-  if width != height:
-    raise ValueError("Only square maps are currently supported by the game engine")
 
   num_resources = int(setting_target(settings, "numResources", 8))
   num_obstacles = int(setting_target(settings, "numObsticale", setting_target(settings, "numObstacles", 0)))
@@ -104,24 +143,27 @@ def generate_random_map():
   return {
     "name": "RandomMap",
     "gridSize": width,
+    "gridWidth": width,
+    "gridHeight": height,
     "players": player_configs,
     "obstacles": obstacles,
     "resources": resources,
-    "startingUnits": generate_starting_units(width, player_configs)
+    "startingUnits": generate_starting_units(width, height, player_configs)
   }
 
 
 def generate_player_configs(width, height, random_player):
+  p1, p2 = farthest_cell_pair(width, height)
   if not random_player:
     return {
       1: {
-        "basePos": {"x": 0, "z": 0},
+        "basePos": p1,
         "startingCrystals": 100,
         "baseHp": 100,
         "maxBaseHp": 100
       },
       2: {
-        "basePos": {"x": width - 1, "z": height - 1},
+        "basePos": p2,
         "startingCrystals": 100,
         "baseHp": 100,
         "maxBaseHp": 100
@@ -151,7 +193,20 @@ def generate_player_configs(width, height, random_player):
       }
     }
 
-  return copy.deepcopy(DEFAULT_MAP["players"])
+  return generate_player_configs(width, height, False)
+
+
+def farthest_cell_pair(width, height):
+  cells = [{"x": x, "z": z} for x in range(width) for z in range(height)]
+  best_pair = (cells[0], cells[-1])
+  best_distance = -1
+  for i, first in enumerate(cells):
+    for second in cells[i + 1:]:
+      distance = get_hex_distance(first["x"], first["z"], second["x"], second["z"])
+      if distance > best_distance:
+        best_distance = distance
+        best_pair = (first, second)
+  return {"x": best_pair[0]["x"], "z": best_pair[0]["z"]}, {"x": best_pair[1]["x"], "z": best_pair[1]["z"]}
 
 
 def generate_obstacles(width, height, player_configs, num_obstacles):
@@ -164,7 +219,7 @@ def generate_obstacles(width, height, player_configs, num_obstacles):
 
   for _ in range(2000):
     selected = random.sample(candidates, num_obstacles)
-    if bases_are_connected(width, player_configs, selected):
+    if bases_are_connected(width, height, player_configs, selected):
       return [{"x": cell["x"], "z": cell["z"]} for cell in selected]
 
   raise ValueError("Could not generate obstacles while preserving a path between bases")
@@ -183,7 +238,7 @@ def obstacle_candidates(width, height, player_configs):
   return candidates
 
 
-def bases_are_connected(width, player_configs, obstacles):
+def bases_are_connected(width, height, player_configs, obstacles):
   base_positions = [player["basePos"] for player in player_configs.values()]
   if len(base_positions) < 2:
     return True
@@ -199,7 +254,7 @@ def bases_are_connected(width, player_configs, obstacles):
     if (x, z) == target:
       return True
 
-    for nx, nz in get_neighbors(x, z, width):
+    for nx, nz in get_neighbors(x, z, width, height):
       if (nx, nz) in blocked or (nx, nz) in visited:
         continue
       visited.add((nx, nz))
@@ -257,16 +312,16 @@ def resource_distance_diff(resources, player_configs):
   return abs(p1_total - p2_total)
 
 
-def generate_starting_units(width, player_configs):
+def generate_starting_units(width, height, player_configs):
   units = []
   for owner, player in player_configs.items():
     base = player["basePos"]
-    spawn = first_spawn_cell(width, base)
+    spawn = first_spawn_cell(width, height, base)
     units.append({"type": "worker", "owner": owner, "x": spawn["x"], "z": spawn["z"]})
   return units
 
 
-def first_spawn_cell(width, base):
-  for x, z in get_neighbors(base["x"], base["z"], width):
+def first_spawn_cell(width, height, base):
+  for x, z in get_neighbors(base["x"], base["z"], width, height):
     return {"x": x, "z": z}
   return {"x": base["x"], "z": base["z"]}

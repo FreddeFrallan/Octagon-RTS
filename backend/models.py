@@ -116,9 +116,11 @@ class Room:
         "basePos": player_config.get("basePos", {"x": 0, "z": 0})
       }
     self.winner = None
-    self.grid_size = map_data.get("gridSize", 8)
+    self.grid_width = map_data.get("gridWidth", map_data.get("gridSize", 8))
+    self.grid_height = map_data.get("gridHeight", map_data.get("gridSize", self.grid_width))
+    self.grid_size = self.grid_width
 
-    self.grid = [[Cell(x, z) for z in range(self.grid_size)] for x in range(self.grid_size)]
+    self.grid = [[Cell(x, z) for z in range(self.grid_height)] for x in range(self.grid_width)]
     for obstacle in map_data.get("obstacles", []):
       cell = self.grid[obstacle["x"]][obstacle["z"]]
       cell.type = 'obstacle'
@@ -188,6 +190,8 @@ class Room:
       "winner": self.winner,
       "players": {str(k): v for k, v in self.players.items()},
       "gridSize": self.grid_size,
+      "gridWidth": self.grid_width,
+      "gridHeight": self.grid_height,
       "grid": [[c.to_dict() for c in row] for row in self.grid],
       "units": units,
       "logs": self.logs

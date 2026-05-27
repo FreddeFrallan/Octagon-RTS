@@ -1,27 +1,29 @@
 {
   "width": {
-    "target": 8,
+    "target": 10,
     "min": 6,
     "max": 12
   },
   "height": {
-    "target": 8,
+    "target": 6,
     "min": 6,
     "max": 12
   },
   "numResources": {
-    "target": 8,
+    "target": 11,
     "min": 0,
     "max": 20
   },
   "numObsticale": {
-    "target": 6,
+    "target": 0,
     "min": 0,
     "max": 20
   },
   "randomPlayer": {
     "target": false,
-    "min": false,
-    "max": true
+    "options": [
+      false,
+      true
+    ]
   }
 }

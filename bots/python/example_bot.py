@@ -66,12 +66,14 @@ def own_units(state, unit_type=None):
   return units
 
 
-def neighbors(x, z, grid_size=8):
+def neighbors(x, z, grid_size=8, grid_height=None):
+  if grid_height is None:
+    grid_height = grid_size
   if z % 2 == 0:
     coords = [(x-1, z), (x+1, z), (x-1, z-1), (x, z-1), (x-1, z+1), (x, z+1)]
   else:
     coords = [(x-1, z), (x+1, z), (x, z-1), (x+1, z-1), (x, z+1), (x+1, z+1)]
-  return [(nx, nz) for nx, nz in coords if 0 <= nx < grid_size and 0 <= nz < grid_size]
+  return [(nx, nz) for nx, nz in coords if 0 <= nx < grid_size and 0 <= nz < grid_height]
 
 
 def pick_worker_move(state):
@@ -81,13 +83,13 @@ def pick_worker_move(state):
 
   grid = state["grid"]
   for worker in workers:
-    for nx, nz in neighbors(worker["x"], worker["z"], state["gridSize"]):
+    for nx, nz in neighbors(worker["x"], worker["z"], state.get("gridWidth", state["gridSize"]), state.get("gridHeight", state["gridSize"])):
       cell = grid[nx][nz]
       if cell["type"] == "resource" and cell["gold"] > 0:
         return worker["id"], nx, nz
 
   worker = workers[0]
-  for nx, nz in neighbors(worker["x"], worker["z"], state["gridSize"]):
+  for nx, nz in neighbors(worker["x"], worker["z"], state.get("gridWidth", state["gridSize"]), state.get("gridHeight", state["gridSize"])):
     if grid[nx][nz]["type"] not in ("base", "obstacle"):
       return worker["id"], nx, nz
   return None

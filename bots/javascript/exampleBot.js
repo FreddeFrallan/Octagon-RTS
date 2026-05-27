@@ -53,11 +53,11 @@ async function action(actionName, args) {
   });
 }
 
-function neighbors(x, z, gridSize = 8) {
+function neighbors(x, z, gridSize = 8, gridHeight = gridSize) {
   const coords = z % 2 === 0
     ? [[x - 1, z], [x + 1, z], [x - 1, z - 1], [x, z - 1], [x - 1, z + 1], [x, z + 1]]
     : [[x - 1, z], [x + 1, z], [x, z - 1], [x + 1, z - 1], [x, z + 1], [x + 1, z + 1]];
-  return coords.filter(([nx, nz]) => nx >= 0 && nx < gridSize && nz >= 0 && nz < gridSize);
+  return coords.filter(([nx, nz]) => nx >= 0 && nx < gridSize && nz >= 0 && nz < gridHeight);
 }
 
 function ownUnits(state, unitType) {
@@ -71,7 +71,7 @@ function pickWorkerMove(state) {
   if (workers.length === 0) return null;
 
   for (const worker of workers) {
-    for (const [nx, nz] of neighbors(worker.x, worker.z, state.gridSize)) {
+    for (const [nx, nz] of neighbors(worker.x, worker.z, state.gridWidth || state.gridSize, state.gridHeight || state.gridSize)) {
       const cell = state.grid[nx][nz];
       if (cell.type === 'resource' && cell.gold > 0) {
         return { unitId: worker.id, x: nx, z: nz };
@@ -80,7 +80,7 @@ function pickWorkerMove(state) {
   }
 
   const worker = workers[0];
-  for (const [nx, nz] of neighbors(worker.x, worker.z, state.gridSize)) {
+  for (const [nx, nz] of neighbors(worker.x, worker.z, state.gridWidth || state.gridSize, state.gridHeight || state.gridSize)) {
     if (state.grid[nx][nz].type !== 'base' && state.grid[nx][nz].type !== 'obstacle') {
       return { unitId: worker.id, x: nx, z: nz };
     }

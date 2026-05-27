@@ -15,9 +15,9 @@ export class GameRenderer {
     this.HEX_WIDTH = Math.sqrt(3) * this.HEX_RADIUS; // ~1.732
     this.HEX_SPACING = 1.5 * this.HEX_RADIUS;
     
-    // Grid centering offsets (for an 8x8 offset hex grid)
-    this.offsetX = 3.625 * this.HEX_WIDTH;
-    this.offsetZ = 3.5 * this.HEX_SPACING;
+    const hasOddRows = this.game.gridHeight > 1;
+    this.offsetX = ((this.game.gridWidth - 1 + (hasOddRows ? 0.5 : 0)) * this.HEX_WIDTH) / 2;
+    this.offsetZ = ((this.game.gridHeight - 1) * this.HEX_SPACING) / 2;
 
     // Maps to track 3D objects
     this.tileMeshes = []; // 2D array [x][z]
@@ -151,9 +151,9 @@ export class GameRenderer {
 
     const edgesGeometry = new THREE.EdgesGeometry(hexGeometry);
 
-    for (let x = 0; x < this.game.gridSize; x++) {
+    for (let x = 0; x < this.game.gridWidth; x++) {
       this.tileMeshes[x] = [];
-      for (let z = 0; z < this.game.gridSize; z++) {
+      for (let z = 0; z < this.game.gridHeight; z++) {
         const cell = this.game.grid[x][z];
         const pos = this.gridToWorld(x, z);
 
@@ -510,7 +510,7 @@ export class GameRenderer {
 
   // Highlight 6 hexagonal adjacent tiles in Green (excluding bases)
   highlightMovementTiles(centerX, centerZ, enable) {
-    const neighbors = getHexNeighbors(centerX, centerZ, this.game.gridSize);
+    const neighbors = getHexNeighbors(centerX, centerZ, this.game.gridWidth, this.game.gridHeight);
     for (const n of neighbors) {
       const cell = this.game.getCell(n.x, n.z);
       if (cell && cell.type !== 'base' && cell.type !== 'obstacle') {
@@ -533,8 +533,8 @@ export class GameRenderer {
     const artConfig = (window.UNITS_CONFIG && window.UNITS_CONFIG.artillery) || { minRange: 1, maxRange: 2 };
     const minRange = artConfig.minRange ?? 1;
     const maxRange = artConfig.maxRange ?? 2;
-    for (let tx = 0; tx < this.game.gridSize; tx++) {
-      for (let tz = 0; tz < this.game.gridSize; tz++) {
+    for (let tx = 0; tx < this.game.gridWidth; tx++) {
+      for (let tz = 0; tz < this.game.gridHeight; tz++) {
         const dist = getHexDistance(centerX, centerZ, tx, tz);
         if (dist >= minRange && dist <= maxRange) {
           if (enable) {
@@ -588,8 +588,8 @@ export class GameRenderer {
     }
 
     // Reset other tiles outlines
-    for (let x = 0; x < this.game.gridSize; x++) {
-      for (let z = 0; z < this.game.gridSize; z++) {
+    for (let x = 0; x < this.game.gridWidth; x++) {
+      for (let z = 0; z < this.game.gridHeight; z++) {
         if (!selectedCell || selectedCell.x !== x || selectedCell.z !== z) {
           this.resetTileOutlineColor(x, z);
         }
@@ -601,8 +601,8 @@ export class GameRenderer {
   syncScene() {
     const currentUnitIds = new Set();
 
-    for (let x = 0; x < this.game.gridSize; x++) {
-      for (let z = 0; z < this.game.gridSize; z++) {
+    for (let x = 0; x < this.game.gridWidth; x++) {
+      for (let z = 0; z < this.game.gridHeight; z++) {
         const cell = this.game.grid[x][z];
         cell.units.forEach(unit => {
           currentUnitIds.add(unit.id);
@@ -652,8 +652,8 @@ export class GameRenderer {
     });
 
     // Sync Gold Nuggets Scaling
-    for (let x = 0; x < this.game.gridSize; x++) {
-      for (let z = 0; z < this.game.gridSize; z++) {
+    for (let x = 0; x < this.game.gridWidth; x++) {
+      for (let z = 0; z < this.game.gridHeight; z++) {
         const cell = this.game.grid[x][z];
         const coordStr = `${x},${z}`;
         
@@ -917,8 +917,8 @@ export class GameRenderer {
     this.raycaster.setFromCamera(this.mouse, this.camera);
 
     const meshesToTest = [];
-    for (let x = 0; x < this.game.gridSize; x++) {
-      for (let z = 0; z < this.game.gridSize; z++) {
+    for (let x = 0; x < this.game.gridWidth; x++) {
+      for (let z = 0; z < this.game.gridHeight; z++) {
         const tileGroup = this.tileMeshes[x][z];
         if (tileGroup && tileGroup.children[0]) {
           meshesToTest.push(tileGroup.children[0]);

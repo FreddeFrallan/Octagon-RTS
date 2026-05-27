@@ -44,12 +44,14 @@ def hex_distance(ax, az, bx, bz):
   return max(abs(acx - bcx), abs(acy - bcy), abs(acz - bcz))
 
 
-def neighbors(x, z, grid_size=8):
+def neighbors(x, z, grid_size=8, grid_height=None):
+  if grid_height is None:
+    grid_height = grid_size
   if z % 2 == 0:
     coords = [(x-1, z), (x+1, z), (x-1, z-1), (x, z-1), (x-1, z+1), (x, z+1)]
   else:
     coords = [(x-1, z), (x+1, z), (x, z-1), (x+1, z-1), (x, z+1), (x+1, z+1)]
-  return [(nx, nz) for nx, nz in coords if 0 <= nx < grid_size and 0 <= nz < grid_size]
+  return [(nx, nz) for nx, nz in coords if 0 <= nx < grid_size and 0 <= nz < grid_height]
 
 
 def unit_priority(unit):
@@ -438,7 +440,7 @@ class StrategicBot:
   def passable_neighbors(self, state, x, z):
     grid = state["grid"]
     return [
-      (nx, nz) for nx, nz in neighbors(x, z, state["gridSize"])
+      (nx, nz) for nx, nz in neighbors(x, z, state.get("gridWidth", state["gridSize"]), state.get("gridHeight", state["gridSize"]))
       if grid[nx][nz]["type"] not in ("base", "obstacle")
     ]
 

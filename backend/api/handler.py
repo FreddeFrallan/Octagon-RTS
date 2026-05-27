@@ -3,7 +3,7 @@ import json
 import urllib.parse
 
 from api.actions import handle_action
-from api.lobby import get_rooms, get_state, host_room, join_room, set_room_map, start_room
+from api.lobby import get_rooms, get_state, host_room, join_room, set_map_settings, set_room_map, start_room
 from api.responses import send_error_json, send_json
 from net import get_local_ip
 from static_files import translate_static_path
@@ -50,6 +50,8 @@ class GameRequestHandler(SimpleHTTPRequestHandler):
       payload, error = join_room(data)
     elif url.path.startswith('/api/start'):
       payload, error = start_room(data)
+    elif url.path.startswith('/api/map-settings'):
+      payload, error = set_map_settings(data)
     elif url.path.startswith('/api/map'):
       payload, error = set_room_map(data)
     elif url.path.startswith('/api/action'):

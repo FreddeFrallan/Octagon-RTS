@@ -11,7 +11,7 @@ def update_base_attacks(room, now_ms):
       continue
 
     hostiles = []
-    for tx, tz in get_neighbors(bx, bz, room.grid_size):
+    for tx, tz in get_neighbors(bx, bz, room.grid_width, room.grid_height):
       for unit in room.units.values():
         if unit.x == tx and unit.z == tz and unit.owner != base_owner and not unit.isMoving and is_attack_ready(unit, now_ms):
           defenders = [d for d in room.units.values() if d.x == tx and d.z == tz and d.owner == base_owner]

@@ -2,7 +2,7 @@ import uuid
 import urllib.parse
 
 from models import Room
-from map_generator import generate_random_map, initalize_map
+from map_generator import generate_random_map, initalize_map, load_random_map_settings, save_random_map_settings
 from state import ROOMS, state_lock
 
 
@@ -142,3 +142,31 @@ def set_room_map(data):
     room.log(f"Map set to {MAP_MODES[map_mode]}.")
 
   return {"success": True, "mapMode": map_mode, "mapName": MAP_MODES[map_mode]}, None
+
+
+def set_map_settings(data):
+  room_id = data.get("roomId")
+  player_id = data.get("playerId")
+  settings = data.get("settings")
+
+  if not isinstance(settings, dict):
+    return None, "Missing map settings"
+
+  with state_lock:
+    if room_id not in ROOMS:
+      return None, "Room not found"
+
+    room = ROOMS[room_id]
+    if room.status != "lobby":
+      return None, "Map settings cannot be changed after the match starts"
+    if player_id != 1:
+      return None, "Only Host can change map settings"
+    if room.map_mode != "random":
+      return None, "Map settings are only available for RandomMap"
+
+    current = load_random_map_settings()
+    updated = {**current, **settings}
+    saved = save_random_map_settings(updated)
+    room.log("RandomMap settings updated.")
+
+  return {"success": True, "settings": saved}, None

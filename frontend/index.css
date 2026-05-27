@@ -434,11 +434,11 @@ select.text-input {
 }
 
 #map-settings-modal {
-  position: absolute;
+  position: fixed;
   inset: 0;
   background: rgba(240, 243, 248, 0.75);
   backdrop-filter: blur(8px);
-  z-index: 95;
+  z-index: 260;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -473,8 +473,8 @@ select.text-input {
 
 .map-setting-row {
   display: grid;
-  grid-template-columns: 1fr 70px 70px 70px;
-  gap: 8px;
+  grid-template-columns: 1fr 190px;
+  gap: 12px;
   align-items: center;
   font-size: 0.9rem;
 }
@@ -493,6 +493,41 @@ select.text-input {
   padding: 7px 8px;
   text-align: center;
   min-height: 32px;
+}
+
+.map-setting-stepper {
+  display: grid;
+  grid-template-columns: 42px 1fr 42px;
+  gap: 6px;
+  align-items: center;
+}
+
+.map-step-button {
+  height: 32px;
+  border: 1px solid rgba(0, 119, 170, 0.18);
+  background: rgba(0, 119, 170, 0.08);
+  color: var(--neon-cyan);
+  border-radius: 6px;
+  font-family: var(--font-title);
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.map-step-button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.map-setting-select {
+  width: 100%;
+  min-height: 32px;
+  border: 1px solid rgba(0, 119, 170, 0.14);
+  background: rgba(0, 119, 170, 0.04);
+  border-radius: 6px;
+  padding: 5px 8px;
+  color: var(--text-main);
+  font-family: var(--font-ui);
+  font-size: 0.95rem;
 }
 
 .lobby-divider {

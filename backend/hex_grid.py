@@ -1,4 +1,7 @@
-def get_neighbors(x, z, grid_size=8):
+def get_neighbors(x, z, grid_width=8, grid_height=None):
+  if grid_height is None:
+    grid_height = grid_width
+
   # Pointy-topped odd-r offset coordinates
   neighbors = []
   if z % 2 == 0:
@@ -7,7 +10,7 @@ def get_neighbors(x, z, grid_size=8):
     coords = [(x-1, z), (x+1, z), (x, z-1), (x+1, z-1), (x, z+1), (x+1, z+1)]
 
   for nx, nz in coords:
-    if 0 <= nx < grid_size and 0 <= nz < grid_size:
+    if 0 <= nx < grid_width and 0 <= nz < grid_height:
       neighbors.append((nx, nz))
   return neighbors
 

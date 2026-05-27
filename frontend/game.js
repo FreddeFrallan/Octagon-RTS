@@ -15,7 +15,7 @@ export function getHexDistance(c1, r1, c2, r2) {
 }
 
 // Get 6 hexagonal neighbors in offset coordinates
-export function getHexNeighbors(x, z, gridSize = 8) {
+export function getHexNeighbors(x, z, gridWidth = 8, gridHeight = gridWidth) {
   const neighbors = [];
   let coords = [];
   if (z % 2 === 0) {
@@ -25,7 +25,7 @@ export function getHexNeighbors(x, z, gridSize = 8) {
   }
 
   for (const [nx, nz] of coords) {
-    if (nx >= 0 && nx < gridSize && nz >= 0 && nz < gridSize) {
+    if (nx >= 0 && nx < gridWidth && nz >= 0 && nz < gridHeight) {
       neighbors.push({ x: nx, z: nz });
     }
   }
@@ -81,6 +81,8 @@ export class GameCell {
 export class GameState {
   constructor(gridSize = 8) {
     this.gridSize = gridSize;
+    this.gridWidth = gridSize;
+    this.gridHeight = gridSize;
     this.grid = [];
     this.players = {
       1: { name: 'Host', color: '#0077aa', crystals: 100, baseHp: 100, maxBaseHp: 100, basePos: { x: 0, z: 0 } }, // crystals field represents gold
@@ -97,16 +99,16 @@ export class GameState {
 
   initGrid() {
     this.grid = [];
-    for (let x = 0; x < this.gridSize; x++) {
+    for (let x = 0; x < this.gridWidth; x++) {
       this.grid[x] = [];
-      for (let z = 0; z < this.gridSize; z++) {
+      for (let z = 0; z < this.gridHeight; z++) {
         this.grid[x][z] = new GameCell(x, z);
       }
     }
   }
 
   getCell(x, z) {
-    if (x >= 0 && x < this.gridSize && z >= 0 && z < this.gridSize) {
+    if (x >= 0 && x < this.gridWidth && z >= 0 && z < this.gridHeight) {
       return this.grid[x][z];
     }
     return null;
@@ -115,6 +117,14 @@ export class GameState {
   // Deserializes state snapshot received from server
   unpackState(data) {
     this.status = data.status;
+    const nextWidth = data.gridWidth || data.gridSize || this.gridSize;
+    const nextHeight = data.gridHeight || data.gridSize || nextWidth;
+    if (nextWidth !== this.gridWidth || nextHeight !== this.gridHeight) {
+      this.gridSize = nextWidth;
+      this.gridWidth = nextWidth;
+      this.gridHeight = nextHeight;
+      this.initGrid();
+    }
     this.gameOver = (data.status === 'gameover');
     this.winner = data.winner;
     this.logs = data.logs;
@@ -132,8 +142,8 @@ export class GameState {
     }
 
     // Unpack Grid Cells
-    for (let x = 0; x < this.gridSize; x++) {
-      for (let z = 0; z < this.gridSize; z++) {
+    for (let x = 0; x < this.gridWidth; x++) {
+      for (let z = 0; z < this.gridHeight; z++) {
         const serverCell = data.grid[x][z];
         const localCell = this.grid[x][z];
         localCell.type = serverCell.type;

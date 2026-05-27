@@ -51,7 +51,7 @@ def move_units(room, player_id, args):
     if unit.isMoving:
       return False, "Unit is already traveling"
 
-    neighbors = get_neighbors(unit.x, unit.z, room.grid_size)
+    neighbors = get_neighbors(unit.x, unit.z, room.grid_width, room.grid_height)
     if (tx, tz) not in neighbors:
       return False, "Invalid coordinate target"
 
@@ -91,7 +91,7 @@ def build_unit(room, player_id, args):
   base_pos = player["basePos"]
   bx, bz = base_pos["x"], base_pos["z"]
   spawn_spots = []
-  for tx, tz in get_neighbors(bx, bz, room.grid_size):
+  for tx, tz in get_neighbors(bx, bz, room.grid_width, room.grid_height):
     if room.grid[tx][tz].type not in ('base', 'obstacle'):
       spawn_spots.append((tx, tz))
 

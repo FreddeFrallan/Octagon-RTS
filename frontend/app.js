@@ -49,6 +49,7 @@ let gamePollInterval = null;
 // Game states
 let isMoveMode = false;
 let isAttackMode = false;
+let currentMapSettings = null;
 
 // DOM Elements - Lobby Screen
 const lobbyScreen = document.getElementById('lobby-screen');
@@ -123,8 +124,38 @@ function init() {
   btnConnectBot.addEventListener('click', handleConnectBot);
   btnDisconnectBot.addEventListener('click', handleDisconnectBot);
   mapModeSelect.addEventListener('change', handleMapModeChange);
-  btnMapSettings.addEventListener('click', showMapSettingsModal);
+  document.addEventListener('click', (ev) => {
+    if (ev.target.closest('#btn-map-settings')) {
+      showMapSettingsModal();
+      return;
+    }
+
+    const stepButton = ev.target.closest('.map-step-button');
+    if (stepButton) {
+      const key = stepButton.dataset.mapSetting;
+      const delta = Number(stepButton.dataset.delta);
+      const setting = currentMapSettings?.[key];
+      if (!setting) return;
+      const nextTarget = Math.max(setting.min, Math.min(setting.max, Number(setting.target) + delta));
+      updateMapSetting(key, nextTarget);
+    }
+  });
+  mapSettingsList.addEventListener('change', (ev) => {
+    const select = ev.target.closest('.map-setting-select');
+    if (!select) return;
+
+    const key = select.dataset.mapSetting;
+    const setting = currentMapSettings?.[key];
+    if (!setting) return;
+    const option = setting.options.find(candidate => String(candidate) === select.value);
+    updateMapSetting(key, option);
+  });
   closeMapSettingsBtn.addEventListener('click', () => mapSettingsModal.classList.add('hidden'));
+  mapSettingsModal.addEventListener('click', (ev) => {
+    if (ev.target === mapSettingsModal) {
+      mapSettingsModal.classList.add('hidden');
+    }
+  });
 
   // Bind instructions modal
   closeInstructionsBtn.addEventListener('click', () => instructionsModal.classList.add('hidden'));
@@ -419,38 +450,104 @@ function formatMapSettingValue(value) {
   return String(value);
 }
 
+function numericMapSettingControl(key, setting) {
+  const target = Number(setting.target);
+  const min = Number(setting.min);
+  const max = Number(setting.max);
+  const decrementDisabled = target <= min ? 'disabled' : '';
+  const incrementDisabled = target >= max ? 'disabled' : '';
+
+  return `
+    <div class="map-setting-stepper">
+      <button class="map-step-button" type="button" data-map-setting="${key}" data-delta="-1" ${decrementDisabled}>‹</button>
+      <span class="map-setting-value">${formatMapSettingValue(setting.target)}</span>
+      <button class="map-step-button" type="button" data-map-setting="${key}" data-delta="1" ${incrementDisabled}>›</button>
+    </div>
+  `;
+}
+
+function optionMapSettingControl(key, setting) {
+  const options = setting.options || [];
+  const optionHtml = options.map(option => {
+    const selected = option === setting.target ? 'selected' : '';
+    return `<option value="${String(option)}" ${selected}>${formatMapSettingValue(option)}</option>`;
+  }).join('');
+
+  return `<select class="map-setting-select" data-map-setting="${key}">${optionHtml}</select>`;
+}
+
+function renderMapSettings(settings) {
+  currentMapSettings = settings;
+  mapSettingsList.innerHTML = `
+    <div class="map-setting-row header">
+      <span>Setting</span>
+      <span>Value</span>
+    </div>
+  `;
+
+  Object.entries(settings).forEach(([key, value]) => {
+    const row = document.createElement('div');
+    row.className = 'map-setting-row';
+    const controlHtml = value.options
+      ? optionMapSettingControl(key, value)
+      : numericMapSettingControl(key, value);
+    row.innerHTML = `
+      <span>${formatMapSettingLabel(key)}</span>
+      ${controlHtml}
+    `;
+    mapSettingsList.appendChild(row);
+  });
+}
+
+async function updateMapSetting(key, target) {
+  if (!currentMapSettings || !currentMapSettings[key]) return;
+
+  const nextSettings = {
+    ...currentMapSettings,
+    [key]: {
+      ...currentMapSettings[key],
+      target
+    }
+  };
+
+  renderMapSettings(nextSettings);
+
+  try {
+    const res = await fetch(`${apiBase}/api/map-settings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        roomId,
+        playerId,
+        settings: nextSettings
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || "Failed to update map settings");
+    }
+    renderMapSettings(data.settings);
+  } catch (err) {
+    mapSettingsList.innerHTML = `<div class="map-setting-value">${err.message}</div>`;
+  }
+}
+
 async function showMapSettingsModal() {
+  mapSettingsList.innerHTML = '<div class="map-setting-value">Loading settings...</div>';
+  mapSettingsModal.classList.remove('hidden');
+
   try {
     const res = await fetch(`${apiBase}/map.json`);
     if (!res.ok) throw new Error("Failed to load map settings");
     const settings = await res.json();
-
-    mapSettingsList.innerHTML = `
-      <div class="map-setting-row header">
-        <span>Setting</span>
-        <span>Target</span>
-        <span>Min</span>
-        <span>Max</span>
-      </div>
-    `;
-
-    Object.entries(settings).forEach(([key, value]) => {
-      const row = document.createElement('div');
-      row.className = 'map-setting-row';
-      row.innerHTML = `
-        <span>${formatMapSettingLabel(key)}</span>
-        <span class="map-setting-value">${formatMapSettingValue(value.target)}</span>
-        <span class="map-setting-value">${formatMapSettingValue(value.min)}</span>
-        <span class="map-setting-value">${formatMapSettingValue(value.max)}</span>
-      `;
-      mapSettingsList.appendChild(row);
-    });
-
-    mapSettingsModal.classList.remove('hidden');
+    renderMapSettings(settings);
   } catch (err) {
-    alert(err.message);
+    mapSettingsList.innerHTML = `<div class="map-setting-value">${err.message}</div>`;
   }
 }
+
+window.showMapSettingsModal = showMapSettingsModal;
 
 // Polling while waiting inside the room lobby
 async function pollLobbyState() {

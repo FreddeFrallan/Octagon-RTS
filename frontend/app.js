@@ -39,6 +39,8 @@ let roomId = null;
 let playerId = null;
 let playerName = "Commander";
 let apiBase = window.location.origin; // Dynamically updated on join
+let connectedBot = null;
+let botSessionActive = false;
 
 // Polling intervals
 let lobbyPollInterval = null;
@@ -58,11 +60,15 @@ const lobbyWaitingGuest = document.getElementById('lobby-waiting-guest');
 const inputPlayerName = document.getElementById('player-name');
 const inputServerIp = document.getElementById('server-ip');
 const inputRoomCode = document.getElementById('room-code');
+const inputBotUrl = document.getElementById('bot-url');
 
 // Buttons
 const btnHostLobby = document.getElementById('btn-host-lobby');
 const btnJoinLobby = document.getElementById('btn-join-lobby');
 const btnStartGame = document.getElementById('btn-start-game');
+const btnConnectBot = document.getElementById('btn-connect-bot');
+const btnDisconnectBot = document.getElementById('btn-disconnect-bot');
+const botStatus = document.getElementById('bot-status');
 
 // Lobby Text Displays
 const hostRoomCode = document.getElementById('host-room-code');
@@ -108,6 +114,8 @@ function init() {
   btnHostLobby.addEventListener('click', handleHostLobby);
   btnJoinLobby.addEventListener('click', handleJoinLobby);
   btnStartGame.addEventListener('click', handleStartGame);
+  btnConnectBot.addEventListener('click', handleConnectBot);
+  btnDisconnectBot.addEventListener('click', handleDisconnectBot);
 
   // Bind instructions modal
   closeInstructionsBtn.addEventListener('click', () => instructionsModal.classList.add('hidden'));
@@ -141,6 +149,112 @@ function init() {
     });
 }
 
+// --- Local Bot Handshake ---
+
+function setBotStatus(message, state = '') {
+  botStatus.innerText = message;
+  botStatus.classList.toggle('connected', state === 'connected');
+  botStatus.classList.toggle('error', state === 'error');
+}
+
+function normalizeBotUrl(url) {
+  const trimmed = url.trim();
+  if (!trimmed) return 'http://127.0.0.1:8787';
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
+  return `http://${trimmed}`;
+}
+
+async function postBot(path, payload) {
+  if (!connectedBot && path !== '/handshake') {
+    throw new Error('No local bot connected');
+  }
+
+  const baseUrl = path === '/handshake' ? normalizeBotUrl(inputBotUrl.value) : connectedBot.url;
+  const res = await fetch(`${baseUrl}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+
+  if (!res.ok) {
+    let errData = {};
+    try {
+      errData = await res.json();
+    } catch (_) {
+      // Ignore non-JSON local bot errors.
+    }
+    throw new Error(errData.error || `Bot request failed: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+async function handleConnectBot() {
+  try {
+    const botUrl = normalizeBotUrl(inputBotUrl.value);
+    inputBotUrl.value = botUrl;
+    setBotStatus('Connecting to local bot...');
+
+    const data = await postBot('/handshake', {
+      protocol: 'octagon-rts-bot-v1',
+      game: 'Octagon-RTS',
+      pageOrigin: window.location.origin
+    });
+
+    connectedBot = {
+      url: botUrl,
+      name: data.name || 'Local Bot'
+    };
+    botSessionActive = false;
+    setBotStatus(`Connected: ${connectedBot.name}`, 'connected');
+    btnConnectBot.classList.add('hidden');
+    btnDisconnectBot.classList.remove('hidden');
+    inputBotUrl.disabled = true;
+  } catch (err) {
+    connectedBot = null;
+    botSessionActive = false;
+    setBotStatus(err.message, 'error');
+  }
+}
+
+async function handleDisconnectBot() {
+  if (connectedBot) {
+    try {
+      await postBot('/stop', {
+        protocol: 'octagon-rts-bot-v1',
+        roomId,
+        playerId
+      });
+    } catch (_) {
+      // The bot may already be stopped or offline.
+    }
+  }
+
+  connectedBot = null;
+  botSessionActive = false;
+  setBotStatus('No bot connected');
+  btnConnectBot.classList.remove('hidden');
+  btnDisconnectBot.classList.add('hidden');
+  inputBotUrl.disabled = false;
+}
+
+async function startConnectedBotSession() {
+  if (!connectedBot) return;
+
+  const data = await postBot('/session', {
+    protocol: 'octagon-rts-bot-v1',
+    gameServer: apiBase,
+    roomId,
+    playerId,
+    playerName,
+    pollMs: 200
+  });
+
+  botSessionActive = true;
+  connectedBot.name = data.name || connectedBot.name;
+  setBotStatus(`Bot playing as ${playerName}: ${connectedBot.name}`, 'connected');
+}
+
 // --- Lobby HTTP client actions ---
 
 async function handleHostLobby() {
@@ -166,8 +280,10 @@ async function handleHostLobby() {
     
     // Setup Host UI state
     hostRoomCode.innerText = roomId;
-    hostServerIp.innerText = `${ipData.ip}:8000`;
+    const serverPort = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
+    hostServerIp.innerText = `${ipData.ip}:${serverPort}`;
     slotHostName.innerText = playerName;
+    await startConnectedBotSession();
     
     lobbySetup.classList.add('hidden');
     lobbyWaitingHost.classList.remove('hidden');
@@ -214,6 +330,7 @@ async function handleJoinLobby() {
 
     // Setup Guest UI state
     guestRoomCode.innerText = roomId;
+    await startConnectedBotSession();
     
     lobbySetup.classList.add('hidden');
     lobbyWaitingGuest.classList.remove('hidden');
@@ -347,16 +464,15 @@ async function pollGameState() {
           renderer.showFloatingDamageText(e.x, e.z, `+${e.amount} Gold`, 'rgba(0, 119, 170, 1)');
 
         } else if (e.type === "artillery_shell") {
-          renderer.createArtilleryShellArc(e.fromX, e.fromZ, e.toX, e.toZ);
-          setTimeout(() => {
-            if (e.damage > 0) {
-              const isP1Target = e.targetOwner === 1;
-              const textColors = isP1Target ? 'rgba(0, 119, 170, 1)' : 'rgba(204, 0, 85, 1)';
-              renderer.showFloatingDamageText(e.toX, e.toZ, `-${e.damage} HP`, textColors);
-            } else {
-              renderer.showFloatingDamageText(e.toX, e.toZ, "Miss", 'rgba(255, 170, 0, 1)');
-            }
-          }, 1000);
+          renderer.createArtilleryShellArc(e.fromX, e.fromZ, e.toX, e.toZ, e.flightTime);
+        } else if (e.type === "artillery_impact") {
+          if (e.damage > 0) {
+            const isP1Target = e.targetOwner === 1;
+            const textColors = isP1Target ? 'rgba(0, 119, 170, 1)' : 'rgba(204, 0, 85, 1)';
+            renderer.showFloatingDamageText(e.toX, e.toZ, `-${e.damage} HP`, textColors);
+          } else {
+            renderer.showFloatingDamageText(e.toX, e.toZ, "Miss", 'rgba(255, 170, 0, 1)');
+          }
         }
       });
     }
@@ -388,6 +504,11 @@ async function pollGameState() {
 // --- Action API Triggers ---
 
 async function sendAction(actionName, args = {}) {
+  if (botSessionActive) {
+    console.warn('Manual actions are disabled while a local bot controls this player.');
+    return;
+  }
+
   try {
     const res = await fetch(`${apiBase}/api/action`, {
       method: 'POST',
@@ -411,10 +532,12 @@ async function sendAction(actionName, args = {}) {
 
 
 function handleBuildAction(unitType) {
+  if (botSessionActive) return;
   sendAction("build", { unitType });
 }
 
 function handleAttackAction() {
+  if (botSessionActive) return;
   if (!game.selectedCell) return;
   isAttackMode = true;
   isMoveMode = false;
@@ -424,6 +547,7 @@ function handleAttackAction() {
 }
 
 function handleStopFireAction() {
+  if (botSessionActive) return;
   if (!game.selectedCell) return;
   const cell = game.getCell(game.selectedCell.x, game.selectedCell.z);
   const selectedArtilleryIds = cell.units
@@ -447,9 +571,10 @@ function onCanvasClick(e) {
 
   if (result) {
     const { x, z } = result;
+    const manualActionsEnabled = !botSessionActive;
 
     // --- Attack Mode Click logic ---
-    if (isAttackMode) {
+    if (manualActionsEnabled && isAttackMode) {
       const dist = getHexDistance(game.selectedCell.x, game.selectedCell.z, x, z);
       const artConfig = unitsConfig.artillery || { minRange: 1, maxRange: 2 };
       if (dist >= (artConfig.minRange ?? 1) && dist <= (artConfig.maxRange ?? 2)) {
@@ -474,7 +599,7 @@ function onCanvasClick(e) {
     }
 
     // --- Move Mode Click logic ---
-    if (isMoveMode) {
+    if (manualActionsEnabled && isMoveMode) {
       const dist = getHexDistance(game.selectedCell.x, game.selectedCell.z, x, z);
 
       // Check if click is on adjacent cell (dist === 1)
@@ -515,7 +640,7 @@ function onCanvasClick(e) {
     const ownedUnits = cell.units.filter(u => u.owner === playerId && game.selectedUnitIds.includes(u.id));
     const isAnyMoving = ownedUnits.some(u => u.isMoving);
 
-    if (ownedUnits.length > 0 && !isAnyMoving) {
+    if (manualActionsEnabled && ownedUnits.length > 0 && !isAnyMoving) {
       isMoveMode = true;
       renderer.highlightMovementTiles(x, z, true);
     } else {
@@ -544,6 +669,7 @@ function onCanvasClick(e) {
 function onCanvasRightClick(e) {
   e.preventDefault();
   if (game.gameOver) return;
+  if (botSessionActive) return;
 
   if (isMoveMode || isAttackMode) {
     const result = renderer.raycastTile(e.clientX, e.clientY);
@@ -615,6 +741,7 @@ function onCanvasMouseMove(e) {
 
 // Return to lobby and reinitialize setup
 function handleRestartLobby() {
+  handleDisconnectBot();
   endGameModal.classList.remove('show');
   lobbyScreen.classList.remove('hidden');
   
@@ -656,6 +783,9 @@ function updateHUD() {
   activePlayerName.style.textShadow = `0 0 10px ${playerId === 1 ? 'rgba(0, 119, 170, 0.2)' : 'rgba(204, 0, 85, 0.2)'}`;
 
   roleTag.innerText = playerId === 1 ? "(Cyan Sector)" : "(Magenta Empire)";
+  if (botSessionActive) {
+    roleTag.innerText += " • Bot Control";
+  }
   roleTag.style.color = playerId === 1 ? 'var(--neon-cyan)' : 'var(--neon-magenta)';
 
   hudRoomCode.innerText = roomId;
@@ -736,7 +866,7 @@ function updateHUD() {
     // Visibility 1: Build options show up ONLY when base is selected
     // and base owner matches player
     const isOwnBase = cell.type === 'base' && cell.owner === playerId;
-    if (isOwnBase) {
+    if (isOwnBase && !botSessionActive) {
       buildOptionsContainer.classList.remove('hidden');
       
       const costWorker = unitsConfig.worker?.cost ?? 50;
@@ -758,7 +888,16 @@ function updateHUD() {
       renderer.highlightAttackTiles(selectedCell.x, selectedCell.z, false);
     }
 
-    if (ownedSelectedUnits.length > 0) {
+    if (botSessionActive) {
+      if (isMoveMode) {
+        isMoveMode = false;
+        renderer.highlightMovementTiles(selectedCell.x, selectedCell.z, false);
+      }
+      if (isAttackMode) {
+        isAttackMode = false;
+        renderer.highlightAttackTiles(selectedCell.x, selectedCell.z, false);
+      }
+    } else if (ownedSelectedUnits.length > 0) {
       const isAnyMoving = ownedSelectedUnits.some(u => u.isMoving);
       if (isAnyMoving) {
         if (isMoveMode) {
@@ -782,7 +921,7 @@ function updateHUD() {
     btnGather.classList.add('hidden');
 
     // Visibility 4: Artillery Attack button options
-    if (hasArtillerySelected) {
+    if (hasArtillerySelected && !botSessionActive) {
       btnAttack.classList.remove('hidden');
       const nowMs = Date.now();
       const anyCoolingDown = ownedSelectedUnits.some(u => u.type === 'artillery' && (nowMs - u.lastAttackTime < 3000));
@@ -792,7 +931,7 @@ function updateHUD() {
     }
 
     const hasFiringArtillery = ownedSelectedUnits.some(u => u.type === 'artillery' && u.attackTargetX !== null && u.attackTargetX !== undefined);
-    if (hasFiringArtillery) {
+    if (hasFiringArtillery && !botSessionActive) {
       btnStopFire.classList.remove('hidden');
     } else {
       btnStopFire.classList.add('hidden');

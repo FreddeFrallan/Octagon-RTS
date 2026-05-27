@@ -762,7 +762,7 @@ export class GameRenderer {
   }
 
   // Parabolic Plasma Shell Arc Firing FX
-  createArtilleryShellArc(fromX, fromZ, toX, toZ) {
+  createArtilleryShellArc(fromX, fromZ, toX, toZ, flightTime = 1000) {
     const start = this.gridToWorld(fromX, fromZ);
     const end = this.gridToWorld(toX, toZ);
     
@@ -779,7 +779,7 @@ export class GameRenderer {
     this.scene.add(projectile);
 
     const startTime = performance.now();
-    const duration = 1000; // 1s flight
+    const duration = typeof flightTime === 'number' && !isNaN(flightTime) && flightTime > 0 ? flightTime : 1000;
 
     const arcAnim = {
       update: () => {
@@ -879,7 +879,15 @@ export class GameRenderer {
   animate(time) {
     requestAnimationFrame((t) => this.animate(t));
     this.controls.update();
-    this.animations = this.animations.filter(anim => !anim.update(time));
+
+    const activeAnimations = this.animations;
+    this.animations = [];
+    activeAnimations.forEach(anim => {
+      if (!anim.update(time)) {
+        this.animations.push(anim);
+      }
+    });
+
     this.renderer.render(this.scene, this.camera);
   }
 

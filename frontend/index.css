@@ -389,6 +389,35 @@ body {
   background: rgba(255, 255, 255, 0.8);
 }
 
+.bot-connect-panel {
+  border: 1px solid rgba(180, 83, 9, 0.25);
+  background: rgba(180, 83, 9, 0.04);
+  border-radius: 8px;
+  padding: 14px;
+  margin-bottom: 18px;
+}
+
+.bot-connect-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.bot-status {
+  margin-top: 10px;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.bot-status.connected {
+  color: var(--neon-green);
+}
+
+.bot-status.error {
+  color: var(--neon-magenta);
+}
+
 .lobby-divider {
   display: flex;
   align-items: center;

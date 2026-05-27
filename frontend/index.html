@@ -29,6 +29,18 @@
             <label for="player-name">Your Callsign</label>
             <input type="text" id="player-name" class="text-input" value="Commander" maxlength="15">
           </div>
+
+          <div class="bot-connect-panel">
+            <div class="form-group">
+              <label for="bot-url">Local Bot URL</label>
+              <input type="text" id="bot-url" class="text-input" value="http://127.0.0.1:8787">
+            </div>
+            <div class="bot-connect-row">
+              <button id="btn-connect-bot" class="btn btn-amber" type="button">Connect Bot</button>
+              <button id="btn-disconnect-bot" class="btn hidden" type="button">Disconnect</button>
+            </div>
+            <div id="bot-status" class="bot-status">No bot connected</div>
+          </div>
           
           <button id="btn-host-lobby" class="btn" style="width:100%; margin-bottom: 15px;">Host Game</button>
           

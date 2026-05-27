@@ -2,6 +2,7 @@
 # Authoritative Real-Time Game Server with match lobby and tick loops (Hexagonal Grid Edition)
 
 from http.server import SimpleHTTPRequestHandler, HTTPServer
+import errno
 import socketserver
 import json
 import uuid
@@ -26,6 +27,13 @@ state_lock = threading.Lock()
 
 # Rooms database
 ROOMS = {}
+
+def get_artillery_shell_flight_ms():
+  anim_config = UNITS_CONFIG.get("artillery", {}).get("animation", {})
+  flight_time = anim_config.get("shellFlightTime", 1000)
+  if not isinstance(flight_time, (int, float)) or flight_time <= 0:
+    return 1000
+  return int(flight_time)
 
 class Unit:
   def __init__(self, uid, utype, owner, x, z):
@@ -137,6 +145,7 @@ class Room:
 
     # Event queues for each player to broadcast action animations (lasers, hits) exactly once
     self.event_queues = {1: [], 2: []}
+    self.pending_artillery_impacts = []
     
     # Global logs
     self.logs = []
@@ -202,6 +211,52 @@ def get_hex_distance(x1, z1, x2, z2):
   bx, by, bz = offset_to_cube(x2, z2)
   return max(abs(ax - bx), abs(ay - by), abs(az - bz))
 
+def resolve_artillery_impact(room, impact):
+  tx = impact["toX"]
+  tz = impact["toZ"]
+  damage = impact["damage"]
+  attacker_owner = impact["attackerOwner"]
+  target_cell = room.grid[tx][tz]
+
+  hit_base = False
+  base_owner = 0
+  if target_cell.type == 'base':
+    hit_base = True
+    base_owner = target_cell.owner
+    base_player = room.players[base_owner]
+    base_player["baseHp"] = max(0, base_player["baseHp"] - damage)
+    room.log(f"💥 Artillery shell impacts Base at [{tx}, {tz}] dealing {damage} damage!", "combat")
+
+    if base_player["baseHp"] <= 0:
+      room.log(f"Base of {base_player['name']} destroyed!")
+      room.status = "gameover"
+      room.winner = attacker_owner
+
+  targets_here = [tu for tu in room.units.values() if tu.x == tx and tu.z == tz and not tu.isMoving]
+  hit_any_unit = False
+  first_target_owner = 0
+  for victim in list(targets_here):
+    if first_target_owner == 0:
+      first_target_owner = victim.owner
+    victim.hp -= damage
+    hit_any_unit = True
+    room.log(f"💥 Artillery blast impacts [{tx}, {tz}] dealing {damage} damage to {room.players[victim.owner]['name']}'s {victim.type.upper()}!", "combat")
+    if victim.hp <= 0:
+      room.log(f"💀 {room.players[victim.owner]['name']}'s {victim.type.upper()} destroyed by artillery blast!", "combat")
+      room.units.pop(victim.id, None)
+
+  if not hit_base and not hit_any_unit:
+    room.log(f"💥 Artillery shell impacts empty cell [{tx}, {tz}]")
+
+  room.add_event({
+    "type": "artillery_impact",
+    "toX": tx,
+    "toZ": tz,
+    "damage": damage if (hit_base or hit_any_unit) else 0,
+    "isBase": hit_base,
+    "targetOwner": base_owner if hit_base else first_target_owner
+  })
+
 # --- Authoritative loops updating rooms in the background ---
 
 def tick_rooms():
@@ -223,6 +278,17 @@ def tick_rooms():
           unit.moveStartTime = None
           unit.moveEndTime = None
           unit.isGathering = False
+
+      # 1.5. Resolve artillery impacts after their shell flight reaches the target cell
+      pending_impacts = []
+      for impact in room.pending_artillery_impacts:
+        if now_ms >= impact["impactTime"]:
+          resolve_artillery_impact(room, impact)
+        else:
+          pending_impacts.append(impact)
+      room.pending_artillery_impacts = pending_impacts
+      if room.status != "playing":
+        continue
 
       # 2. Update Resource Gathering (every 2.0s tick per worker automatically when on resource tile)
       for unit in list(room.units.values()):
@@ -272,50 +338,24 @@ def tick_rooms():
               unit.attackTargetX = None
               unit.attackTargetZ = None
               continue
-              
-            target_cell = room.grid[tx][tz]
             
             damage = art_config.get("attack", 16) 
-            
-            # Find ALL units on this tile (friend or foe)
-            targets_here = [tu for tu in room.units.values() if tu.x == tx and tu.z == tz and not tu.isMoving]
-            
-            # Hit base if target cell is a base
-            hit_base = False
-            base_owner = 0
-            if target_cell.type == 'base':
-              hit_base = True
-              base_owner = target_cell.owner
-              base_player = room.players[base_owner]
-              base_player["baseHp"] = max(0, base_player["baseHp"] - damage)
-              room.log(f"💥 Artillery shells Base at [{tx}, {tz}] dealing {damage} damage!", "combat")
-              
-              if base_player["baseHp"] <= 0:
-                room.log(f"Base of {base_player['name']} destroyed!")
-                room.status = "gameover"
-                room.winner = unit.owner
-            
-            # Hit units on this tile
-            hit_any_unit = False
-            for victim in list(targets_here):
-              victim.hp -= damage
-              hit_any_unit = True
-              room.log(f"💥 Artillery blast shells [{tx}, {tz}] dealing {damage} damage to {room.players[victim.owner]['name']}'s {victim.type.upper()}!", "combat")
-              if victim.hp <= 0:
-                room.log(f"💀 {room.players[victim.owner]['name']}'s {victim.type.upper()} destroyed by artillery blast!", "combat")
-                room.units.pop(victim.id, None)
-            
-            if not hit_base and not hit_any_unit:
-              room.log(f"💥 Artillery shells empty cell [{tx}, {tz}]")
+            shell_flight_ms = get_artillery_shell_flight_ms()
+            room.pending_artillery_impacts.append({
+              "attackerOwner": unit.owner,
+              "toX": tx,
+              "toZ": tz,
+              "damage": damage,
+              "impactTime": now_ms + shell_flight_ms
+            })
+            room.log(f"💥 Artillery fires at [{tx}, {tz}]", "combat")
 
             # Add client event
             room.add_event({
               "type": "artillery_shell",
               "fromX": unit.x, "fromZ": unit.z,
               "toX": tx, "toZ": tz,
-              "damage": damage if (hit_base or hit_any_unit) else 0,
-              "isBase": hit_base,
-              "targetOwner": base_owner if hit_base else (targets_here[0].owner if targets_here else 0)
+              "flightTime": shell_flight_ms
             })
 
       # 3. Update Real-Time Combat ticks (runs once per 1.0s)
@@ -479,6 +519,7 @@ class GameRequestHandler(SimpleHTTPRequestHandler):
     params = urllib.parse.parse_qs(query_str)
     room_id = params.get('roomId', [None])[0]
     player_str = params.get('playerId', [None])[0]
+    include_events = params.get('events', ['1'])[0] != '0'
 
     if not room_id or not player_str:
       self.send_error_json("Missing roomId or playerId")
@@ -493,10 +534,12 @@ class GameRequestHandler(SimpleHTTPRequestHandler):
       
       room = ROOMS[room_id]
       state = room.to_dict(player_id)
-      
-      events = list(room.event_queues[player_id])
-      room.event_queues[player_id] = []
-      state["events"] = events
+      if include_events:
+        events = list(room.event_queues[player_id])
+        room.event_queues[player_id] = []
+        state["events"] = events
+      else:
+        state["events"] = []
 
     self.send_json(state)
 
@@ -738,17 +781,38 @@ def get_local_ip():
 class ThreadingHTTPServer(socketserver.ThreadingMixIn, HTTPServer):
   pass
 
+def create_server(host, port):
+  try:
+    return ThreadingHTTPServer((host, port), GameRequestHandler)
+  except OSError as e:
+    if e.errno != errno.EADDRINUSE:
+      raise
+
+    bind_addr = "localhost" if host in ("0.0.0.0", "::", "127.0.0.1") else host
+    print("="*60)
+    print(f"Cannot start server: {bind_addr}:{port} is already in use.")
+    print("Another Octagon-RTS server or another app is already using that port.")
+    print(f"Stop the existing process, or start this server on another port:")
+    print(f"  PORT={port + 1} python3 backend/server.py")
+    print(f"  PORT={port + 1} ./start-localhost.sh")
+    print("="*60)
+    raise SystemExit(1) from e
+
 if __name__ == '__main__':
-  PORT = 8000
+  HOST = os.environ.get("HOST", "0.0.0.0")
+  PORT = int(os.environ.get("PORT", "8000"))
   local_ip = get_local_ip()
   print("="*60)
   print(f"OCTO-COMMAND Authoritative Multiplayer Game Server starting...")
   print(f"Server is running locally at: http://localhost:{PORT}")
-  print(f"Local Network IP: http://{local_ip}:{PORT}")
-  print("Ask your friend on the same network to join using the network IP!")
+  if HOST in ("0.0.0.0", "::"):
+    print(f"Local Network IP: http://{local_ip}:{PORT}")
+    print("Ask your friend on the same network to join using the network IP!")
+  else:
+    print(f"Bound to: {HOST}:{PORT}")
   print("="*60)
 
-  server = ThreadingHTTPServer(('0.0.0.0', PORT), GameRequestHandler)
+  server = create_server(HOST, PORT)
   try:
     server.serve_forever()
   except KeyboardInterrupt:

@@ -41,6 +41,7 @@
     "animation": {
       "size": 0.7,
       "color": "gold",
+      "shellFlightTime": 1000,
       "traceFadeTime": 1000
     }
   }

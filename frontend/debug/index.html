@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Unit Object Workstation</title>
+  <link rel="stylesheet" href="workstation.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <canvas id="workstation-canvas"></canvas>
+  <div class="unit-controls" aria-label="Unit selector">
+    <button class="unit-button active" type="button" data-unit-type="worker">Worker</button>
+    <button class="unit-button" type="button" data-unit-type="mech">Mech</button>
+    <button class="unit-button" type="button" data-unit-type="artillery">Artillery</button>
+  </div>
+  <script type="module" src="workstation.js"></script>
+</body>
+</html>

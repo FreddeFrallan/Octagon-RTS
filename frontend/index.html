@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Octo-Command: Neon Grid (Real-Time)</title>
+  <link rel="stylesheet" href="index.css">
+  
+  <!-- Import map for Three.js modules -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="game-container">
+    <!-- Lobby Screen Overlay -->
+    <div id="lobby-screen">
+      <div class="lobby-card">
+        <h1 class="lobby-title">Octo-Command</h1>
+        
+        <!-- Setup Screen -->
+        <div id="lobby-setup" class="lobby-section">
+          <div class="form-group" style="margin-bottom: 20px;">
+            <label for="player-name">Your Callsign</label>
+            <input type="text" id="player-name" class="text-input" value="Commander" maxlength="15">
+          </div>
+          
+          <button id="btn-host-lobby" class="btn" style="width:100%; margin-bottom: 15px;">Host Game</button>
+          
+          <div class="lobby-divider">Or Join Network Game</div>
+          
+          <div class="form-group" style="margin-top: 15px; margin-bottom: 10px;">
+            <label for="server-ip">Host Server Address</label>
+            <input type="text" id="server-ip" class="text-input" placeholder="localhost:8000">
+          </div>
+          <div class="form-group" style="margin-bottom: 20px;">
+            <label for="room-code">Room Code</label>
+            <input type="text" id="room-code" class="text-input" placeholder="e.g. A1B2">
+          </div>
+          <button id="btn-join-lobby" class="btn btn-magenta" style="width:100%;">Join Game</button>
+        </div>
+
+        <!-- Waiting Screen (Host) -->
+        <div id="lobby-waiting-host" class="lobby-section hidden">
+          <div class="status-box">
+            <span style="font-size: 0.85rem; text-transform: uppercase; color: var(--text-muted);">Match Room Created</span>
+            <span id="host-room-code" style="font-family: var(--font-title); font-size: 2.2rem; font-weight: bold; color: var(--neon-amber);">----</span>
+            <span class="connection-info">Host IP: <span id="host-server-ip">loading...</span></span>
+          </div>
+          
+          <div class="players-list" style="margin: 20px 0;">
+            <div class="player-slot occupied p1">
+              <span>🔵 Cyan Sector (Host):</span>
+              <span id="slot-host-name">Waiting...</span>
+            </div>
+            <div class="player-slot p2" id="slot-guest-container">
+              <span>🔴 Magenta Empire (Guest):</span>
+              <span id="slot-guest-name">Waiting for player...</span>
+            </div>
+          </div>
+          
+          <button id="btn-start-game" class="btn btn-green" style="width:100%;" disabled>Start Match</button>
+        </div>
+
+        <!-- Waiting Screen (Guest) -->
+        <div id="lobby-waiting-guest" class="lobby-section hidden">
+          <div class="status-box">
+            <span style="font-size: 0.85rem; text-transform: uppercase; color: var(--text-muted);">Joined Match Room</span>
+            <span id="guest-room-code" style="font-family: var(--font-title); font-size: 2.2rem; font-weight: bold; color: var(--neon-amber);">----</span>
+            <span class="connection-info" style="color: var(--neon-magenta);">Role: Magenta Empire (P2)</span>
+          </div>
+          
+          <div class="players-list" style="margin: 20px 0;">
+            <div class="player-slot occupied p1">
+              <span>🔵 Cyan Sector (Host):</span>
+              <span id="guest-slot-host">Connected</span>
+            </div>
+            <div class="player-slot occupied p2">
+              <span>🔴 Magenta Empire (Guest):</span>
+              <span id="guest-slot-guest">Connected</span>
+            </div>
+          </div>
+          
+          <div style="text-align: center; font-size: 0.95rem; color: var(--text-muted); animation: pulse 1.5s infinite;">
+            Waiting for Host to start match...
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Three.js Canvas -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- HUD Overlay Panels -->
+    
+    <!-- Top Bar: Status and Resource Stats -->
+    <div id="top-bar" class="hud-panel">
+      <div class="player-info">
+        <div id="active-player-indicator" class="player-indicator p1"></div>
+        <span id="active-player-name" class="turn-text" style="color: var(--neon-cyan)">Cyan Sector</span>
+        <span id="role-tag" style="font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); margin-left: 5px;">(Spectator)</span>
+      </div>
+      
+      <div class="room-display">
+        <span>Room:</span>
+        <span id="hud-room-code" class="room-id-badge">----</span>
+      </div>
+      
+      <div id="resource-container" class="resource-display">
+        <span class="resource-icon">🪙</span>
+        <span id="resource-count">100</span>
+      </div>
+    </div>
+
+
+
+    <!-- Camera Controls (Floating) -->
+    <div id="camera-controls">
+      <button id="cam-rot-ccw" class="cam-btn" title="Rotate Left">↺</button>
+      <button id="cam-rot-cw" class="cam-btn" title="Rotate Right">↻</button>
+      <button id="cam-tilt-up" class="cam-btn" title="Tilt Up">▲</button>
+      <button id="cam-tilt-down" class="cam-btn" title="Tilt Down">▼</button>
+      <button id="cam-zoom-in" class="cam-btn" title="Zoom In">+</button>
+      <button id="cam-zoom-out" class="cam-btn" title="Zoom Out">−</button>
+      <button id="cam-reset" class="cam-btn" title="Reset View">⌂</button>
+    </div>
+
+
+
+    <!-- Bottom Action Controls -->
+    <div id="actions-panel" class="hud-panel">
+      <div class="selection-details">
+        <div id="selection-name" class="selection-title">Select a tile</div>
+        <div id="selection-coord" class="selection-stats">Click on an octagon cell to view options</div>
+        <div id="selection-unit-stack" class="selection-stack">
+          <!-- Populated dynamically: badges for units standing on selected tile -->
+        </div>
+      </div>
+
+      <div class="action-buttons">
+        <button id="action-gather" class="btn hidden">
+          Gather Gold
+          <span class="cost">Continuous Auto-Harvest</span>
+        </button>
+
+        <button id="action-attack" class="btn btn-magenta hidden">
+          Artillery Fire
+          <span class="cost">Range 1-2</span>
+        </button>
+
+        <button id="action-stop" class="btn btn-amber hidden">
+          Stop Fire
+          <span class="cost">Cancel Target Lock</span>
+        </button>
+
+        <!-- Build options wrapped for contextual display -->
+        <div id="build-options-container" class="hidden" style="display: flex; gap: 15px;">
+          <button id="action-build-worker" class="btn btn-magenta">
+            Build Worker
+            <span class="cost">🪙 50</span>
+          </button>
+          <button id="action-build-mech" class="btn btn-magenta">
+            Build Mech
+            <span class="cost">🪙 100</span>
+          </button>
+          <button id="action-build-artillery" class="btn btn-magenta">
+            Build Artillery
+            <span class="cost">🪙 80</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Game Instructions Modal -->
+    <div id="instructions-modal" class="hidden">
+      <div class="instructions-content">
+        <h2 class="panel-title" style="color: var(--neon-cyan); border-bottom-color: var(--neon-cyan)">Neon Grid Rules</h2>
+        <p>Welcome, Commander. You control a base on a grid of hexagons. Your goal is to destroy the enemy base.</p>
+        <ul>
+          <li><strong>Real-Time Battles:</strong> The game is played in real-time. No turns! Multiple mechs, workers, and artillery can move and attack simultaneously.</li>
+          <li><strong>Bases:</strong> Your command base can build units. Build buttons appear <strong>only</strong> when you click your own base tile. Built units spawn at a random adjacent tile.</li>
+          <li><strong>Workers (🪙 50):</strong> Can mine gold from resource tiles. Move a worker onto a resource tile and they will automatically gather gold (gather 25 gold every 2s).</li>
+          <li><strong>Mechs (🪙 100):</strong> Combat-heavy mechs (30 HP, 8 Attack). Move mechs to attack hostiles automatically.</li>
+          <li><strong>Artillery (🪙 80):</strong> Long-range shelling platforms (5 HP, 15 Attack) with a 1-2 hex range. Right-click performs default movement. Click <strong>Artillery Fire</strong> to enter Attack Mode, coloring the 1-2 range cells <strong>red</strong>, and target any hex (including enemy bases). Can shell enemy bases from adjacent tiles.</li>
+          <li><strong>Movement:</strong> Select a tile containing your units. Adjacent hexes light up in <strong>green</strong>. Click or right-click a green hex to move selected units there. Units take 1.5 seconds to travel.</li>
+          <li><strong>Real-Time Combat:</strong> When mechs/workers of opposing teams occupy the same tile, they automatically trade blows every 1 second. Artillery can attack from 1-2 hexes away. Destroy the enemy base to win!</li>
+        </ul>
+        <button id="close-instructions" class="btn">Deploy to Grid</button>
+      </div>
+    </div>
+
+    <!-- Victory/Defeat Modal -->
+    <div id="end-game-modal">
+      <div class="modal-content">
+        <h1 class="modal-title" id="end-title" style="color: var(--neon-cyan)">Victory Achieved</h1>
+        <div class="modal-winner" id="end-winner-text" style="color: var(--text-main)">PLAYER 1 DOMINATES THE SECTOR</div>
+        <button id="action-restart" class="btn btn-amber" style="margin: 0 auto;">Return to Lobby</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game Modules -->
+  <script type="module" src="app.js"></script>
+</body>
+</html>

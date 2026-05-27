@@ -1,0 +1,47 @@
+{
+  "worker": {
+    "name": "Worker",
+    "cost": 50,
+    "maxHp": 10,
+    "attack": 1,
+    "minRange": 0,
+    "maxRange": 0,
+    "moveSpeed": 1.0,
+    "description": "Can mine gold from resource tiles. Continuous Auto-Harvest.",
+    "animation": {
+      "size": 0.5,
+      "color": "cyan",
+      "modelType": "harvester"
+    }
+  },
+  "mech": {
+    "name": "Mech",
+    "cost": 100,
+    "maxHp": 30,
+    "attack": 8,
+    "minRange": 0,
+    "maxRange": 0,
+    "moveSpeed": 1.2,
+    "description": "Combat-heavy mechs. Move mechs to attack hostiles automatically.",
+    "animation": {
+      "size": 0.8,
+      "color": "magenta",
+      "glowIntensity": 1.5
+    }
+  },
+  "artillery": {
+    "name": "Artillery",
+    "cost": 80,
+    "maxHp": 5,
+    "attack": 16,
+    "minRange": 1,
+    "maxRange": 2,
+    "moveSpeed": 0.8,
+    "description": "Long-range shelling platforms with a 1-2 hex range.",
+    "animation": {
+      "size": 0.7,
+      "color": "gold",
+      "traceFadeTime": 1000
+    }
+  }
+}

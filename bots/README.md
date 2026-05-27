@@ -79,3 +79,41 @@ Action body:
 ```
 
 Run one of the examples, then use `http://127.0.0.1:8787` in the lobby bot URL field.
+
+Python example:
+
+```bash
+python3 bots/python/example_bot.py
+```
+
+Use a different port:
+
+```bash
+python3 bots/python/example_bot.py --port 8788
+```
+
+Then enter the matching URL in the lobby:
+
+```text
+http://127.0.0.1:8788
+```
+
+Other Python flags:
+
+```bash
+python3 bots/python/example_bot.py --host 127.0.0.1 --port 8787 --name "Worker Bot"
+```
+
+Strategic Python bot:
+
+```bash
+python3 bots/python/strategic_bot/run_bot.py --port 8788
+```
+
+Then enter:
+
+```text
+http://127.0.0.1:8788
+```
+
+This example balances worker/resource play against combat pressure. Workers seek resources while avoiding enemies; mechs and artillery prioritize enemy workers, then enemy combat units, then the base.

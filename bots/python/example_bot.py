@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import argparse
 import json
 import threading
 import time
@@ -7,6 +8,7 @@ import urllib.error
 import urllib.request
 
 BOT_NAME = "Python Worker Bot"
+BOT_HOST = "127.0.0.1"
 BOT_PORT = 8787
 
 session = None
@@ -175,5 +177,12 @@ class BotHandler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-  print(f"{BOT_NAME} listening on http://127.0.0.1:{BOT_PORT}")
-  ThreadingHTTPServer(("127.0.0.1", BOT_PORT), BotHandler).serve_forever()
+  parser = argparse.ArgumentParser(description="Run the Octagon-RTS example Python bot.")
+  parser.add_argument("--host", default=BOT_HOST, help=f"Host/interface to bind. Default: {BOT_HOST}")
+  parser.add_argument("--port", type=int, default=BOT_PORT, help=f"Port to bind. Default: {BOT_PORT}")
+  parser.add_argument("--name", default=BOT_NAME, help=f"Bot name shown in the lobby. Default: {BOT_NAME}")
+  args = parser.parse_args()
+
+  BOT_NAME = args.name
+  print(f"{BOT_NAME} listening on http://{args.host}:{args.port}")
+  ThreadingHTTPServer((args.host, args.port), BotHandler).serve_forever()

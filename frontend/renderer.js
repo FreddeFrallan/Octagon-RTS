@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { getHexNeighbors, getHexDistance } from './game.js';
+import { createUnitObject } from './objects/index.js';
 
 export class GameRenderer {
   constructor(canvasId, game) {
@@ -337,142 +338,16 @@ export class GameRenderer {
   }
 
   createUnitMesh(unit) {
-    const group = new THREE.Group();
+    const player = this.game.players[unit.owner];
+    const teamColor = new THREE.Color(player ? player.color : 0xcccccc);
+    const unitObject = createUnitObject(unit, teamColor, (unitId) => this.unitMeshes.has(unitId));
+    const group = unitObject.group;
     const pos = this.gridToWorld(unit.x, unit.z);
     
     const offset = this.getStackOffset(unit.id, unit.x, unit.z);
     group.position.set(pos.x + offset.x, pos.y, pos.z + offset.z);
 
-    const player = this.game.players[unit.owner];
-    const teamColor = new THREE.Color(player ? player.color : 0xcccccc);
-
-    if (unit.type === 'worker') {
-      const bodyGeo = new THREE.SphereGeometry(0.25, 8, 8);
-      const metalMat = new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.3, metalness: 0.7 });
-      const glowMat = new THREE.MeshBasicMaterial({ color: teamColor });
-      
-      const body = new THREE.Mesh(bodyGeo, metalMat);
-      body.position.y = 0.4;
-      body.castShadow = true;
-      group.add(body);
-
-      const ringGeo = new THREE.TorusGeometry(0.28, 0.05, 4, 12);
-      ringGeo.rotateX(Math.PI / 2);
-      const ring = new THREE.Mesh(ringGeo, glowMat);
-      ring.position.y = 0.4;
-      group.add(ring);
-
-      const wingGeo = new THREE.BoxGeometry(0.12, 0.08, 0.35);
-      const wingL = new THREE.Mesh(wingGeo, metalMat);
-      wingL.position.set(-0.35, 0.4, 0);
-      const wingR = wingL.clone();
-      wingR.position.x = 0.35;
-      group.add(wingL);
-      group.add(wingR);
-
-      const randomPhase = Math.random() * Math.PI * 2;
-      this.animations.push({
-        id: `bob_${unit.id}`,
-        update: (time) => {
-          if (!this.unitMeshes.has(unit.id)) return true;
-          body.position.y = 0.4 + Math.sin(time * 3.5 + randomPhase) * 0.05;
-          ring.position.y = body.position.y;
-          wingL.position.y = body.position.y;
-          wingR.position.y = body.position.y;
-          return false;
-        }
-      });
-
-    } else if (unit.type === 'mech') {
-      const darkMetalMat = new THREE.MeshStandardMaterial({ color: 0x556677, roughness: 0.4, metalness: 0.8 });
-      const neonMat = new THREE.MeshBasicMaterial({ color: teamColor });
-
-      const chassisGeo = new THREE.BoxGeometry(0.6, 0.25, 0.6);
-      const chassis = new THREE.Mesh(chassisGeo, darkMetalMat);
-      chassis.position.y = 0.125;
-      chassis.castShadow = true;
-      chassis.receiveShadow = true;
-      group.add(chassis);
-
-      const turretGeo = new THREE.BoxGeometry(0.4, 0.2, 0.4);
-      const turret = new THREE.Mesh(turretGeo, darkMetalMat);
-      turret.position.y = 0.35;
-      turret.castShadow = true;
-      group.add(turret);
-
-      const stripGeo = new THREE.BoxGeometry(0.42, 0.05, 0.42);
-      const strip = new THREE.Mesh(stripGeo, neonMat);
-      strip.position.y = 0.35;
-      group.add(strip);
-
-      const barrelGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.4);
-      barrelGeo.rotateX(Math.PI / 2);
-      const barrelL = new THREE.Mesh(barrelGeo, darkMetalMat);
-      barrelL.position.set(-0.16, 0.35, 0.3);
-      barrelL.castShadow = true;
-      const barrelR = barrelL.clone();
-      barrelR.position.x = 0.16;
-      group.add(barrelL);
-      group.add(barrelR);
-
-      const randomPhase = Math.random() * Math.PI * 2;
-      this.animations.push({
-        id: `bob_${unit.id}`,
-        update: (time) => {
-          if (!this.unitMeshes.has(unit.id)) return true;
-          turret.rotation.y = Math.sin(time * 0.7 + randomPhase) * 0.15;
-          strip.rotation.y = turret.rotation.y;
-          barrelL.position.x = -0.16 + Math.sin(time * 0.7 + randomPhase) * 0.02;
-          barrelR.position.x = 0.16 + Math.sin(time * 0.7 + randomPhase) * 0.02;
-          return false;
-        }
-      });
-      
-    } else if (unit.type === 'artillery') {
-      const darkMetalMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.4, metalness: 0.6 });
-      const neonMat = new THREE.MeshBasicMaterial({ color: teamColor });
-      const brassMat = new THREE.MeshStandardMaterial({ color: 0xcca625, roughness: 0.2, metalness: 0.8 }); // brass cannon barrel
-
-      // Platform / Chassis
-      const platformGeo = new THREE.CylinderGeometry(0.3, 0.35, 0.15, 6);
-      const platform = new THREE.Mesh(platformGeo, darkMetalMat);
-      platform.position.y = 0.075;
-      platform.castShadow = true;
-      group.add(platform);
-
-      // Turret house
-      const houseGeo = new THREE.BoxGeometry(0.35, 0.2, 0.35);
-      const house = new THREE.Mesh(houseGeo, darkMetalMat);
-      house.position.y = 0.25;
-      house.castShadow = true;
-      group.add(house);
-
-      // Long Mortar Cannon Barrel pointing up-forward
-      const barrelGeo = new THREE.CylinderGeometry(0.05, 0.06, 0.5, 6);
-      barrelGeo.rotateX(Math.PI / 3); // tilt mortar upward 60 deg
-      barrelGeo.translate(0, 0.15, 0.15); // shift pivot
-      
-      const barrel = new THREE.Mesh(barrelGeo, brassMat);
-      barrel.position.y = 0.25;
-      barrel.castShadow = true;
-      group.add(barrel);
-
-      // Glow strips
-      const stripGeo = new THREE.CylinderGeometry(0.32, 0.32, 0.03, 6);
-      const strip = new THREE.Mesh(stripGeo, neonMat);
-      strip.position.y = 0.15;
-      group.add(strip);
-
-      this.animations.push({
-        id: `bob_${unit.id}`,
-        update: (time) => {
-          if (!this.unitMeshes.has(unit.id)) return true;
-          house.rotation.y = Math.sin(time * 0.5) * 0.1;
-          barrel.rotation.y = house.rotation.y;
-          return false;
-        }
-      });
-    }
+    this.animations.push(...unitObject.animations);
 
     this.scene.add(group);
     this.unitMeshes.set(unit.id, group);

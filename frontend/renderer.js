@@ -605,7 +605,9 @@ export class GameRenderer {
             meshGroup = this.createUnitMesh(unit);
           }
 
-          const offset = this.getStackOffset(unit.id, unit.x, unit.z);
+          const offsetCellX = unit.isMoving && unit.targetX !== null && unit.targetX !== undefined ? unit.targetX : unit.x;
+          const offsetCellZ = unit.isMoving && unit.targetZ !== null && unit.targetZ !== undefined ? unit.targetZ : unit.z;
+          const offset = this.getStackOffset(unit.id, offsetCellX, offsetCellZ);
           
           if (unit.isMoving) {
             const serverNow = Date.now();
@@ -614,7 +616,9 @@ export class GameRenderer {
             const t = Math.max(0, Math.min(elapsed / (duration || 1), 1.0));
             const ease = t * (2 - t);
             
-            const startWorld = this.gridToWorld(unit.x, unit.z);
+            const startX = unit.moveStartX !== null && unit.moveStartX !== undefined ? unit.moveStartX : unit.x;
+            const startZ = unit.moveStartZ !== null && unit.moveStartZ !== undefined ? unit.moveStartZ : unit.z;
+            const startWorld = this.gridToWorld(startX, startZ);
             const targetWorld = this.gridToWorld(unit.targetX, unit.targetZ);
 
             const currentX = startWorld.x + (targetWorld.x - startWorld.x) * ease;

@@ -11,9 +11,10 @@ def main():
   parser.add_argument("--port", type=int, default=8788, help="Port to bind. Default: 8788")
   parser.add_argument("--name", default="Python Strategic Bot", help="Bot name shown in the lobby.")
   parser.add_argument("--max-actions", type=int, default=6, help="Maximum orders to send per strategy tick. Default: 6")
+  parser.add_argument("--quiet", action="store_true", help="Suppress strategy action logs.")
   args = parser.parse_args()
 
-  bot = StrategicBot(name=args.name, max_actions_per_tick=args.max_actions)
+  bot = StrategicBot(name=args.name, max_actions_per_tick=args.max_actions, verbose=not args.quiet)
   print(f"{bot.name} listening on http://{args.host}:{args.port}")
   BotHttpServer(args.host, args.port, bot).serve_forever()
 

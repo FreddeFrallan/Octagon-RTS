@@ -34,3 +34,5 @@ python3 bots/python/strategic_bot/run_bot.py --host 127.0.0.1 --port 8788 --name
 ```
 
 `--max-actions` limits how many build/move/attack orders the bot can send per tick. Lower it if you want a slower, easier-to-watch bot.
+
+By default the bot prints accepted actions and rejected API calls. Use `--quiet` to suppress those logs.

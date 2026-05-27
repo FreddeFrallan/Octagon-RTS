@@ -63,9 +63,10 @@ def unit_priority(unit):
 
 
 class StrategicBot:
-  def __init__(self, name="Python Strategic Bot", max_actions_per_tick=6):
+  def __init__(self, name="Python Strategic Bot", max_actions_per_tick=6, verbose=True):
     self.name = name
     self.max_actions_per_tick = max_actions_per_tick
+    self.verbose = verbose
     self.session = None
     self.session_lock = threading.Lock()
     self.thread = None
@@ -113,8 +114,8 @@ class StrategicBot:
       try:
         state = self.fetch_state(current)
         self.play_tick(current, state)
-      except (urllib.error.URLError, TimeoutError, KeyError, json.JSONDecodeError):
-        pass
+      except (urllib.error.URLError, TimeoutError, KeyError, json.JSONDecodeError) as e:
+        self.log(f"tick skipped: {type(e).__name__}: {e}")
 
       time.sleep(current.get("pollMs", 200) / 1000)
 
@@ -132,8 +133,18 @@ class StrategicBot:
         "action": action_name,
         "args": args
       })
-      return result.get("success", False)
-    except urllib.error.HTTPError:
+      success = result.get("success", False)
+      if success:
+        self.log(f"{action_name} {args}")
+      return success
+    except urllib.error.HTTPError as e:
+      message = e.reason
+      try:
+        payload = json.loads(e.read().decode("utf-8"))
+        message = payload.get("error", message)
+      except (json.JSONDecodeError, UnicodeDecodeError):
+        pass
+      self.log(f"{action_name} rejected: {message}")
       return False
 
   def play_tick(self, current, state):
@@ -304,16 +315,21 @@ class StrategicBot:
     if not candidates:
       return None
 
+    current_resource_distance = hex_distance(worker["x"], worker["z"], target["x"], target["z"]) if target else 0
+
     def score(coord):
       x, z = coord
       enemy_distance = self.nearest_enemy_distance(x, z, enemies)
       resource_distance = hex_distance(x, z, target["x"], target["z"]) if target else 0
+      progress = current_resource_distance - resource_distance
       resource_bonus = 3 if grid[x][z]["type"] == "resource" and grid[x][z]["gold"] > 0 else 0
-      danger_penalty = 8 if enemy_distance <= 1 else 0
-      return enemy_distance * 1.5 - resource_distance + resource_bonus - danger_penalty
+      danger_penalty = max(0, 4 - enemy_distance) * 3
+      safety_bonus = min(enemy_distance, 6) * 0.3
+      return progress * 5 - resource_distance + resource_bonus + safety_bonus - danger_penalty
 
     best = max(candidates, key=score)
-    if current_enemy_distance <= 2 or (target and hex_distance(best[0], best[1], target["x"], target["z"]) < hex_distance(worker["x"], worker["z"], target["x"], target["z"])):
+    best_resource_distance = hex_distance(best[0], best[1], target["x"], target["z"]) if target else 0
+    if current_enemy_distance <= 2 or not target or best_resource_distance <= current_resource_distance:
       return best
     return None
 
@@ -445,3 +461,7 @@ class StrategicBot:
       "action": "attack",
       "args": {"unitIds": [unit_id], "toX": x, "toZ": z}
     }
+
+  def log(self, message):
+    if self.verbose:
+      print(f"[{self.name}] {message}", flush=True)

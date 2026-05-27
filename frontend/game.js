@@ -40,20 +40,25 @@ export class Unit {
     const config = (window.UNITS_CONFIG && window.UNITS_CONFIG[type]) || {};
     const defaultMaxHp = type === 'mech' ? 30 : (type === 'artillery' ? 5 : 10);
     const defaultAttack = type === 'mech' ? 8 : (type === 'artillery' ? 16 : 1);
+    const defaultAttackCooldown = type === 'artillery' ? 2000 : 1000;
     const defaultMoveSpeed = type === 'mech' ? 1.2 : (type === 'artillery' ? 0.8 : 1.0);
     this.maxHp = config.maxHp ?? defaultMaxHp;
     this.hp = this.maxHp;
     this.attack = config.attack ?? defaultAttack;
+    this.attackCooldown = config.attackCooldown ?? defaultAttackCooldown;
     this.moveSpeed = config.moveSpeed ?? defaultMoveSpeed;
 
     this.x = x;
     this.z = z;
     
     this.isMoving = false;
+    this.moveStartX = null;
+    this.moveStartZ = null;
     this.targetX = null;
     this.targetZ = null;
     this.moveStartTime = null;
     this.moveEndTime = null;
+    this.hasSnappedToTarget = false;
     this.isGathering = false;
     this.lastAttackTime = 0;
     this.attackTargetX = null;
@@ -146,20 +151,25 @@ export class GameState {
       unit.hp = su.hp;
       unit.maxHp = su.maxHp;
       unit.attack = su.attack;
+      unit.attackCooldown = su.attackCooldown;
       unit.moveSpeed = su.moveSpeed;
       unit.isMoving = su.isMoving;
+      unit.moveStartX = su.moveStartX;
+      unit.moveStartZ = su.moveStartZ;
       unit.targetX = su.targetX;
       unit.targetZ = su.targetZ;
       unit.moveStartTime = su.moveStartTime;
       unit.moveEndTime = su.moveEndTime;
+      unit.hasSnappedToTarget = su.hasSnappedToTarget;
       unit.isGathering = su.isGathering;
       unit.lastAttackTime = su.lastAttackTime;
       unit.attackTargetX = su.attackTargetX;
       unit.attackTargetZ = su.attackTargetZ;
 
-      // Map moving units to target coord in client local grid to keep selection
-      const targetCellX = unit.isMoving ? unit.targetX : unit.x;
-      const targetCellZ = unit.isMoving ? unit.targetZ : unit.z;
+      // Moving units are associated with their authoritative server cell.
+      // The server snaps this association to the target cell at 50% travel.
+      const targetCellX = unit.x;
+      const targetCellZ = unit.z;
       
       const cell = this.getCell(targetCellX, targetCellZ);
       if (cell) {

@@ -1,0 +1,41 @@
+from hex_grid import get_neighbors
+from simulation.combat import is_attack_ready
+
+
+def update_base_attacks(room, now_ms):
+  for base_owner, base_pos in [(1, (0, 0)), (2, (7, 7))]:
+    bx, bz = base_pos
+    base_player = room.players[base_owner]
+    if base_player["baseHp"] <= 0:
+      continue
+
+    hostiles = []
+    for tx, tz in get_neighbors(bx, bz, room.grid_size):
+      for unit in room.units.values():
+        if unit.x == tx and unit.z == tz and unit.owner != base_owner and not unit.isMoving and is_attack_ready(unit, now_ms):
+          defenders = [d for d in room.units.values() if d.x == tx and d.z == tz and d.owner == base_owner]
+          if not defenders:
+            hostiles.append(unit)
+
+    if hostiles:
+      for unit in hostiles:
+        if base_player["baseHp"] <= 0:
+          break
+        base_player["baseHp"] = max(0, base_player["baseHp"] - unit.attack)
+        unit.lastAttackTime = now_ms
+        room.log(f"💥 {room.players[unit.owner]['name']}'s {unit.type.upper()} shells Base for {unit.attack} damage (Base HP: {base_player['baseHp']}/{base_player['maxBaseHp']})", "combat")
+        room.add_event({
+          "type": "combat_hit",
+          "x": bx,
+          "z": bz,
+          "damage": unit.attack,
+          "targetOwner": base_owner,
+          "isBase": True,
+          "attackerX": unit.x,
+          "attackerZ": unit.z
+        })
+
+      if base_player["baseHp"] <= 0:
+        room.log(f"🏆 Base destroyed! Game over.")
+        room.status = "gameover"
+        room.winner = hostiles[0].owner

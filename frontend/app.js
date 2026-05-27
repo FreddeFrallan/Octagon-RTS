@@ -923,9 +923,7 @@ function updateHUD() {
     // Visibility 4: Artillery Attack button options
     if (hasArtillerySelected && !botSessionActive) {
       btnAttack.classList.remove('hidden');
-      const nowMs = Date.now();
-      const anyCoolingDown = ownedSelectedUnits.some(u => u.type === 'artillery' && (nowMs - u.lastAttackTime < 3000));
-      btnAttack.disabled = anyCoolingDown;
+      btnAttack.disabled = false;
     } else {
       btnAttack.classList.add('hidden');
     }

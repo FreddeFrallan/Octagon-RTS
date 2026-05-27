@@ -1,6 +1,27 @@
 {
-  "gridSize": [8, 8],
-  "numResources": 8,
-  "numObsticale": 6,
-  "randomPlayer": false
+  "width": {
+    "target": 8,
+    "min": 6,
+    "max": 12
+  },
+  "height": {
+    "target": 8,
+    "min": 6,
+    "max": 12
+  },
+  "numResources": {
+    "target": 8,
+    "min": 0,
+    "max": 20
+  },
+  "numObsticale": {
+    "target": 6,
+    "min": 0,
+    "max": 20
+  },
+  "randomPlayer": {
+    "target": false,
+    "min": false,
+    "max": true
+  }
 }

@@ -1,0 +1,19 @@
+# Boot
+
+Start the local server from the project root:
+
+```bash
+./start-localhost.sh
+```
+
+Then open:
+
+```text
+http://localhost:8000
+```
+
+The script binds the server to `127.0.0.1` by default. Override the port if needed:
+
+```bash
+PORT=8080 ./start-localhost.sh
+```

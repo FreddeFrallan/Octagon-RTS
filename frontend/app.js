@@ -67,6 +67,7 @@ const mapModeSelect = document.getElementById('map-mode-select');
 const btnHostLobby = document.getElementById('btn-host-lobby');
 const btnJoinLobby = document.getElementById('btn-join-lobby');
 const btnStartGame = document.getElementById('btn-start-game');
+const btnMapSettings = document.getElementById('btn-map-settings');
 const btnConnectBot = document.getElementById('btn-connect-bot');
 const btnDisconnectBot = document.getElementById('btn-disconnect-bot');
 const botStatus = document.getElementById('bot-status');
@@ -102,6 +103,9 @@ const btnBuildArtillery = document.getElementById('action-build-artillery');
 
 // Modals
 const instructionsModal = document.getElementById('instructions-modal');
+const mapSettingsModal = document.getElementById('map-settings-modal');
+const mapSettingsList = document.getElementById('map-settings-list');
+const closeMapSettingsBtn = document.getElementById('close-map-settings');
 const closeInstructionsBtn = document.getElementById('close-instructions');
 const toggleRulesBtn = document.getElementById('instructions-btn');
 const endGameModal = document.getElementById('end-game-modal');
@@ -119,6 +123,8 @@ function init() {
   btnConnectBot.addEventListener('click', handleConnectBot);
   btnDisconnectBot.addEventListener('click', handleDisconnectBot);
   mapModeSelect.addEventListener('change', handleMapModeChange);
+  btnMapSettings.addEventListener('click', showMapSettingsModal);
+  closeMapSettingsBtn.addEventListener('click', () => mapSettingsModal.classList.add('hidden'));
 
   // Bind instructions modal
   closeInstructionsBtn.addEventListener('click', () => instructionsModal.classList.add('hidden'));
@@ -365,6 +371,7 @@ function mapModeLabel(mapMode) {
 
 async function handleMapModeChange() {
   if (!roomId || playerId !== 1) return;
+  updateMapSettingsButton();
 
   try {
     const res = await fetch(`${apiBase}/api/map`, {
@@ -386,6 +393,65 @@ async function handleMapModeChange() {
   }
 }
 
+function updateMapSettingsButton() {
+  if (playerId === 1 && mapModeSelect.value === 'random') {
+    btnMapSettings.classList.remove('hidden');
+  } else {
+    btnMapSettings.classList.add('hidden');
+  }
+}
+
+function formatMapSettingLabel(key) {
+  const labels = {
+    width: 'Width',
+    height: 'Height',
+    numResources: 'Resources',
+    numObsticale: 'Obstacles',
+    randomPlayer: 'Random Players'
+  };
+  return labels[key] || key;
+}
+
+function formatMapSettingValue(value) {
+  if (typeof value === 'boolean') {
+    return value ? 'Yes' : 'No';
+  }
+  return String(value);
+}
+
+async function showMapSettingsModal() {
+  try {
+    const res = await fetch(`${apiBase}/map.json`);
+    if (!res.ok) throw new Error("Failed to load map settings");
+    const settings = await res.json();
+
+    mapSettingsList.innerHTML = `
+      <div class="map-setting-row header">
+        <span>Setting</span>
+        <span>Target</span>
+        <span>Min</span>
+        <span>Max</span>
+      </div>
+    `;
+
+    Object.entries(settings).forEach(([key, value]) => {
+      const row = document.createElement('div');
+      row.className = 'map-setting-row';
+      row.innerHTML = `
+        <span>${formatMapSettingLabel(key)}</span>
+        <span class="map-setting-value">${formatMapSettingValue(value.target)}</span>
+        <span class="map-setting-value">${formatMapSettingValue(value.min)}</span>
+        <span class="map-setting-value">${formatMapSettingValue(value.max)}</span>
+      `;
+      mapSettingsList.appendChild(row);
+    });
+
+    mapSettingsModal.classList.remove('hidden');
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
 // Polling while waiting inside the room lobby
 async function pollLobbyState() {
   try {
@@ -395,6 +461,7 @@ async function pollLobbyState() {
     const currentMapMode = data.mapMode || 'standard';
     mapModeSelect.value = currentMapMode;
     guestMapMode.innerText = mapModeLabel(currentMapMode);
+    updateMapSettingsButton();
 
     if (playerId === 1) {
       // Host: check if player 2 joined

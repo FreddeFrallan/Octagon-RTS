@@ -84,6 +84,7 @@
                 <option value="random">RandomMap</option>
               </select>
             </div>
+            <button id="btn-map-settings" class="btn hidden" type="button">Map Settings</button>
           </div>
           
           <button id="btn-start-game" class="btn btn-green" style="width:100%;" disabled>Start Match</button>
@@ -124,6 +125,16 @@
 
     <!-- Three.js Canvas -->
     <canvas id="game-canvas"></canvas>
+
+    <div id="map-settings-modal" class="hidden">
+      <div class="map-settings-content">
+        <div class="modal-header-row">
+          <h2 class="panel-title">Map Settings</h2>
+          <button id="close-map-settings" class="cam-btn" type="button" title="Close">×</button>
+        </div>
+        <div id="map-settings-list" class="map-settings-list"></div>
+      </div>
+    </div>
 
     <!-- HUD Overlay Panels -->
     

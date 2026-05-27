@@ -310,7 +310,7 @@ class StrategicBot:
     current_cell = grid[worker["x"]][worker["z"]]
     current_enemy_distance = self.nearest_enemy_distance(worker["x"], worker["z"], enemies)
 
-    if current_cell["type"] == "resource" and current_cell["gold"] > 0 and current_enemy_distance > 2:
+    if target and hex_distance(worker["x"], worker["z"], target["x"], target["z"]) == 1 and current_enemy_distance > 2:
       return None
 
     candidates = self.passable_neighbors(state, worker["x"], worker["z"])
@@ -324,7 +324,7 @@ class StrategicBot:
       enemy_distance = self.nearest_enemy_distance(x, z, enemies)
       resource_distance = hex_distance(x, z, target["x"], target["z"]) if target else 0
       progress = current_resource_distance - resource_distance
-      resource_bonus = 3 if grid[x][z]["type"] == "resource" and grid[x][z]["gold"] > 0 else 0
+      resource_bonus = 3 if target and hex_distance(x, z, target["x"], target["z"]) == 1 else 0
       danger_penalty = max(0, 4 - enemy_distance) * 3
       safety_bonus = min(enemy_distance, 6) * 0.3
       return progress * 5 - resource_distance + resource_bonus + safety_bonus - danger_penalty
@@ -442,6 +442,7 @@ class StrategicBot:
     return [
       (nx, nz) for nx, nz in neighbors(x, z, state.get("gridWidth", state["gridSize"]), state.get("gridHeight", state["gridSize"]))
       if grid[nx][nz]["type"] not in ("base", "obstacle")
+      and grid[nx][nz]["type"] != "resource"
     ]
 
   def nearest_enemy_distance(self, x, z, enemies):

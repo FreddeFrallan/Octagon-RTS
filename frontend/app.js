@@ -654,8 +654,9 @@ async function pollGameState() {
 
         } else if (e.type === "gather_beam") {
           const targetPos = renderer.gridToWorld(e.x, e.z);
-          const topPoint = new THREE.Vector3(targetPos.x, targetPos.y + 0.6, targetPos.z);
-          const bottomPoint = new THREE.Vector3(targetPos.x, targetPos.y - 0.1, targetPos.z);
+          const workerPos = renderer.gridToWorld(e.workerX, e.workerZ);
+          const topPoint = new THREE.Vector3(workerPos.x, workerPos.y + 0.35, workerPos.z);
+          const bottomPoint = new THREE.Vector3(targetPos.x, targetPos.y + 0.35, targetPos.z);
           
           renderer.createLaserBeam(topPoint, bottomPoint, 0x0077aa);
           renderer.showFloatingDamageText(e.x, e.z, `+${e.amount} Gold`, 'rgba(0, 119, 170, 1)');
@@ -738,7 +739,7 @@ function handleAttackAction() {
   if (!game.selectedCell) return;
   isAttackMode = true;
   isMoveMode = false;
-  renderer.highlightMovementTiles(game.selectedCell.x, game.selectedCell.z, false);
+  renderer.highlightMovementTiles(game.selectedCell.x, game.selectedCell.z, false, getSelectedOwnedUnits());
   renderer.highlightAttackTiles(game.selectedCell.x, game.selectedCell.z, true);
   updateHUD();
 }
@@ -760,6 +761,18 @@ function handleStopFireAction() {
 }
 
 // --- Selection & Canvas click controls ---
+
+function getSelectedOwnedUnits() {
+  if (!game.selectedCell) return [];
+  const cell = game.getCell(game.selectedCell.x, game.selectedCell.z);
+  return cell.units.filter(u => u.owner === playerId && game.selectedUnitIds.includes(u.id));
+}
+
+function canSelectedUnitsEnterCell(x, z) {
+  const cell = game.getCell(x, z);
+  if (!cell || cell.type === 'base' || cell.type === 'obstacle' || cell.type === 'resource') return false;
+  return true;
+}
 
 function onCanvasClick(e) {
   if (game.gameOver) return;
@@ -800,7 +813,7 @@ function onCanvasClick(e) {
       const dist = getHexDistance(game.selectedCell.x, game.selectedCell.z, x, z);
 
       // Check if click is on adjacent cell (dist === 1)
-      if (dist === 1) {
+      if (dist === 1 && canSelectedUnitsEnterCell(x, z)) {
         // Send move request
         sendAction("move", {
           unitIds: game.selectedUnitIds,
@@ -810,7 +823,7 @@ function onCanvasClick(e) {
         
         // Reset move mode green outlines
         isMoveMode = false;
-        renderer.highlightMovementTiles(game.selectedCell.x, game.selectedCell.z, false);
+        renderer.highlightMovementTiles(game.selectedCell.x, game.selectedCell.z, false, getSelectedOwnedUnits());
         
         // Keep selection on target cell
         game.selectedCell = { x, z };
@@ -820,7 +833,7 @@ function onCanvasClick(e) {
       } else {
         // Clicked far away: cancel move mode and select clicked tile normally
         isMoveMode = false;
-        renderer.highlightMovementTiles(game.selectedCell.x, game.selectedCell.z, false);
+        renderer.highlightMovementTiles(game.selectedCell.x, game.selectedCell.z, false, getSelectedOwnedUnits());
       }
     }
 
@@ -839,7 +852,7 @@ function onCanvasClick(e) {
 
     if (manualActionsEnabled && ownedUnits.length > 0 && !isAnyMoving) {
       isMoveMode = true;
-      renderer.highlightMovementTiles(x, z, true);
+      renderer.highlightMovementTiles(x, z, true, ownedUnits);
     } else {
       isMoveMode = false;
     }
@@ -850,7 +863,7 @@ function onCanvasClick(e) {
     // Clicked void - cancel modes and deselect
     if (isMoveMode) {
       isMoveMode = false;
-      renderer.highlightMovementTiles(game.selectedCell.x, game.selectedCell.z, false);
+      renderer.highlightMovementTiles(game.selectedCell.x, game.selectedCell.z, false, getSelectedOwnedUnits());
     }
     if (isAttackMode) {
       isAttackMode = false;
@@ -875,7 +888,7 @@ function onCanvasRightClick(e) {
       const dist = getHexDistance(game.selectedCell.x, game.selectedCell.z, x, z);
 
       // Check if click is on adjacent cell
-      if (dist === 1) {
+      if (dist === 1 && canSelectedUnitsEnterCell(x, z)) {
         if (isAttackMode) {
           isAttackMode = false;
           renderer.highlightAttackTiles(game.selectedCell.x, game.selectedCell.z, false);
@@ -890,7 +903,7 @@ function onCanvasRightClick(e) {
         
         // Reset Move Mode
         isMoveMode = false;
-        renderer.highlightMovementTiles(game.selectedCell.x, game.selectedCell.z, false);
+        renderer.highlightMovementTiles(game.selectedCell.x, game.selectedCell.z, false, getSelectedOwnedUnits());
         
         // Update selection to destination
         game.selectedCell = { x, z };
@@ -914,7 +927,7 @@ function onCanvasMouseMove(e) {
       const isAttackRange = game.selectedCell && getHexDistance(game.selectedCell.x, game.selectedCell.z, lastHovered.x, lastHovered.z) >= (artConfig.minRange ?? 1) && getHexDistance(game.selectedCell.x, game.selectedCell.z, lastHovered.x, lastHovered.z) <= (artConfig.maxRange ?? 2);
       
       const lastCell = game.getCell(lastHovered.x, lastHovered.z);
-      const isBlocked = lastCell.type === 'base' || lastCell.type === 'obstacle';
+      const isBlocked = !canSelectedUnitsEnterCell(lastHovered.x, lastHovered.z);
 
       if (!isSelected && !(isMoveMode && isAdjacentToSelect && !isBlocked) && !(isAttackMode && isAttackRange)) {
         renderer.resetTileOutlineColor(lastHovered.x, lastHovered.z);
@@ -927,7 +940,7 @@ function onCanvasMouseMove(e) {
       const isAttackRange = game.selectedCell && getHexDistance(game.selectedCell.x, game.selectedCell.z, hovered.x, hovered.z) >= (artConfig.minRange ?? 1) && getHexDistance(game.selectedCell.x, game.selectedCell.z, hovered.x, hovered.z) <= (artConfig.maxRange ?? 2);
       
       const hoveredCell = game.getCell(hovered.x, hovered.z);
-      const isBlocked = hoveredCell.type === 'base' || hoveredCell.type === 'obstacle';
+      const isBlocked = !canSelectedUnitsEnterCell(hovered.x, hovered.z);
 
       if (!isSelected && !(isMoveMode && isAdjacentToSelect && !isBlocked) && !(isAttackMode && isAttackRange)) {
         renderer.setTileOutlineColor(hovered.x, hovered.z, new THREE.Color(0xffffff));
@@ -1004,7 +1017,7 @@ function updateHUD() {
     
     if (isMoveMode) {
       isMoveMode = false;
-      renderer.highlightMovementTiles(0, 0, false);
+      renderer.highlightMovementTiles(0, 0, false, []);
     }
     if (isAttackMode) {
       isAttackMode = false;
@@ -1092,7 +1105,7 @@ function updateHUD() {
     if (botSessionActive) {
       if (isMoveMode) {
         isMoveMode = false;
-        renderer.highlightMovementTiles(selectedCell.x, selectedCell.z, false);
+        renderer.highlightMovementTiles(selectedCell.x, selectedCell.z, false, ownedSelectedUnits);
       }
       if (isAttackMode) {
         isAttackMode = false;
@@ -1103,18 +1116,18 @@ function updateHUD() {
       if (isAnyMoving) {
         if (isMoveMode) {
           isMoveMode = false;
-          renderer.highlightMovementTiles(selectedCell.x, selectedCell.z, false);
+          renderer.highlightMovementTiles(selectedCell.x, selectedCell.z, false, ownedSelectedUnits);
         }
       } else {
         if (!isMoveMode && !isAttackMode) {
           isMoveMode = true;
-          renderer.highlightMovementTiles(selectedCell.x, selectedCell.z, true);
+          renderer.highlightMovementTiles(selectedCell.x, selectedCell.z, true, ownedSelectedUnits);
         }
       }
     } else {
       if (isMoveMode) {
         isMoveMode = false;
-        renderer.highlightMovementTiles(selectedCell.x, selectedCell.z, false);
+        renderer.highlightMovementTiles(selectedCell.x, selectedCell.z, false, ownedSelectedUnits);
       }
     }
 

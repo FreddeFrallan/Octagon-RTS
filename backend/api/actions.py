@@ -55,8 +55,9 @@ def move_units(room, player_id, args):
     if (tx, tz) not in neighbors:
       return False, "Invalid coordinate target"
 
-    if room.grid[tx][tz].type in ('base', 'obstacle'):
-      return False, "Cannot enter blocked terrain"
+    can_enter, error_msg = can_unit_enter_cell(room, unit, tx, tz)
+    if not can_enter:
+      return False, error_msg
 
   now_ms = int(time.time() * 1000)
   for uid in unit_ids:
@@ -92,7 +93,7 @@ def build_unit(room, player_id, args):
   bx, bz = base_pos["x"], base_pos["z"]
   spawn_spots = []
   for tx, tz in get_neighbors(bx, bz, room.grid_width, room.grid_height):
-    if room.grid[tx][tz].type not in ('base', 'obstacle'):
+    if can_unit_type_enter_cell(room, utype, tx, tz)[0]:
       spawn_spots.append((tx, tz))
 
   if not spawn_spots:
@@ -102,6 +103,17 @@ def build_unit(room, player_id, args):
   sx, sz = random.choice(spawn_spots)
   room.spawn_unit(utype, player_id, sx, sz)
   room.log(f"{player['name']} spawned {utype} at [{sx}, {sz}].", "build")
+  return True, ""
+
+
+def can_unit_enter_cell(room, unit, tx, tz):
+  return can_unit_type_enter_cell(room, unit.type, tx, tz)
+
+
+def can_unit_type_enter_cell(room, unit_type, tx, tz):
+  cell_type = room.grid[tx][tz].type
+  if cell_type in ('base', 'obstacle', 'resource'):
+    return False, "Cannot enter blocked terrain"
   return True, ""
 
 

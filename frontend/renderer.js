@@ -26,6 +26,7 @@ export class GameRenderer {
     this.crystalMeshes = new Map(); // cellCoordString (e.g. "x,z") -> Group (gold resource nodes)
     this.baseMeshes = new Map(); // playerId -> Group
     this.animations = []; // List of active animation objects
+    this.lastFrameTimeMs = 0;
 
     // Mouse interaction
     this.raycaster = new THREE.Raycaster();
@@ -383,12 +384,13 @@ export class GameRenderer {
     this.setTileOutlineColor(x, z, color);
   }
 
-  // Highlight 6 hexagonal adjacent tiles in Green (excluding bases)
-  highlightMovementTiles(centerX, centerZ, enable) {
+  // Highlight 6 hexagonal adjacent tiles in Green.
+  highlightMovementTiles(centerX, centerZ, enable, selectedUnits = []) {
     const neighbors = getHexNeighbors(centerX, centerZ, this.game.gridWidth, this.game.gridHeight);
     for (const n of neighbors) {
       const cell = this.game.getCell(n.x, n.z);
-      if (cell && cell.type !== 'base' && cell.type !== 'obstacle') {
+      const canEnter = cell && cell.type !== 'base' && cell.type !== 'obstacle' && cell.type !== 'resource';
+      if (canEnter) {
         if (enable) {
           this.setTileOutlineColor(n.x, n.z, new THREE.Color(0x39ff14));
         } else {
@@ -399,6 +401,8 @@ export class GameRenderer {
             this.resetTileOutlineColor(n.x, n.z);
           }
         }
+      } else if (!enable && cell) {
+        this.resetTileOutlineColor(n.x, n.z);
       }
     }
   }
@@ -491,27 +495,19 @@ export class GameRenderer {
           const offsetCellZ = unit.isMoving && unit.targetZ !== null && unit.targetZ !== undefined ? unit.targetZ : unit.z;
           const offset = this.getStackOffset(unit.id, offsetCellX, offsetCellZ);
           
-          if (unit.isMoving) {
-            const serverNow = Date.now();
-            const duration = unit.moveEndTime - unit.moveStartTime;
-            const elapsed = serverNow - unit.moveStartTime;
-            const t = Math.max(0, Math.min(elapsed / (duration || 1), 1.0));
-            const ease = t * (2 - t);
-            
-            const startX = unit.moveStartX !== null && unit.moveStartX !== undefined ? unit.moveStartX : unit.x;
-            const startZ = unit.moveStartZ !== null && unit.moveStartZ !== undefined ? unit.moveStartZ : unit.z;
-            const startWorld = this.gridToWorld(startX, startZ);
-            const targetWorld = this.gridToWorld(unit.targetX, unit.targetZ);
-
-            const currentX = startWorld.x + (targetWorld.x - startWorld.x) * ease;
-            const currentZ = startWorld.z + (targetWorld.z - startWorld.z) * ease;
-            const currentY = 0.15 + Math.sin(t * Math.PI) * 0.4;
-
-            meshGroup.position.set(currentX + offset.x, currentY, currentZ + offset.z);
-          } else {
-            const pos = this.gridToWorld(unit.x, unit.z);
-            meshGroup.position.set(pos.x + offset.x, 0.15, pos.z + offset.z);
-          }
+          meshGroup.userData.renderState = {
+            x: unit.x,
+            z: unit.z,
+            isMoving: unit.isMoving,
+            targetX: unit.targetX,
+            targetZ: unit.targetZ,
+            moveStartX: unit.moveStartX,
+            moveStartZ: unit.moveStartZ,
+            moveStartTime: unit.moveStartTime,
+            moveEndTime: unit.moveEndTime,
+            offsetX: offset.x,
+            offsetZ: offset.z
+          };
         });
       }
     }
@@ -551,6 +547,41 @@ export class GameRenderer {
         }
       }
     }
+  }
+
+  getUnitDesiredPosition(renderState) {
+    if (renderState.isMoving && renderState.targetX !== null && renderState.targetX !== undefined && renderState.targetZ !== null && renderState.targetZ !== undefined) {
+      const serverNow = Date.now();
+      const duration = renderState.moveEndTime - renderState.moveStartTime;
+      const elapsed = serverNow - renderState.moveStartTime;
+      const t = Math.max(0, Math.min(elapsed / (duration || 1), 1.0));
+      const ease = t * (2 - t);
+
+      const startX = renderState.moveStartX !== null && renderState.moveStartX !== undefined ? renderState.moveStartX : renderState.x;
+      const startZ = renderState.moveStartZ !== null && renderState.moveStartZ !== undefined ? renderState.moveStartZ : renderState.z;
+      const startWorld = this.gridToWorld(startX, startZ);
+      const targetWorld = this.gridToWorld(renderState.targetX, renderState.targetZ);
+
+      return new THREE.Vector3(
+        startWorld.x + (targetWorld.x - startWorld.x) * ease + renderState.offsetX,
+        0.15 + Math.sin(t * Math.PI) * 0.4,
+        startWorld.z + (targetWorld.z - startWorld.z) * ease + renderState.offsetZ
+      );
+    }
+
+    const pos = this.gridToWorld(renderState.x, renderState.z);
+    return new THREE.Vector3(pos.x + renderState.offsetX, 0.15, pos.z + renderState.offsetZ);
+  }
+
+  updateUnitVisuals(deltaSeconds) {
+    const smoothing = 1 - Math.exp(-deltaSeconds * 18);
+
+    this.unitMeshes.forEach(meshGroup => {
+      const renderState = meshGroup.userData.renderState;
+      if (!renderState) return;
+
+      meshGroup.position.lerp(this.getUnitDesiredPosition(renderState), smoothing);
+    });
   }
 
   // --- Effects and Explosions ---
@@ -762,9 +793,15 @@ export class GameRenderer {
     }, 850);
   }
 
-  animate(time) {
+  animate(timeMs) {
     requestAnimationFrame((t) => this.animate(t));
     this.controls.update();
+
+    const deltaSeconds = this.lastFrameTimeMs > 0 ? Math.min((timeMs - this.lastFrameTimeMs) / 1000, 0.1) : 0;
+    this.lastFrameTimeMs = timeMs;
+
+    const time = timeMs / 1000;
+    this.updateUnitVisuals(deltaSeconds);
 
     const activeAnimations = this.animations;
     this.animations = [];

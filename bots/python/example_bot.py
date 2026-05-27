@@ -76,21 +76,82 @@ def neighbors(x, z, grid_size=8, grid_height=None):
   return [(nx, nz) for nx, nz in coords if 0 <= nx < grid_size and 0 <= nz < grid_height]
 
 
+def hex_distance(x1, z1, x2, z2):
+  def offset_to_cube(col, row):
+    cx = col - (row - (row & 1)) // 2
+    cz = row
+    cy = -cx - cz
+    return cx, cy, cz
+
+  ax, ay, az = offset_to_cube(x1, z1)
+  bx, by, bz = offset_to_cube(x2, z2)
+  return max(abs(ax - bx), abs(ay - by), abs(az - bz))
+
+
+def is_passable(cell):
+  return cell["type"] not in ("base", "obstacle", "resource")
+
+
+def resource_cells(state):
+  cells = []
+  for row in state["grid"]:
+    for cell in row:
+      if cell["type"] == "resource" and cell["gold"] > 0:
+        cells.append(cell)
+  return cells
+
+
+def adjacent_mining_tiles(state, resource):
+  grid = state["grid"]
+  width = state.get("gridWidth", state["gridSize"])
+  height = state.get("gridHeight", state["gridSize"])
+  return [
+    (nx, nz)
+    for nx, nz in neighbors(resource["x"], resource["z"], width, height)
+    if is_passable(grid[nx][nz])
+  ]
+
+
 def pick_worker_move(state):
   workers = own_units(state, "worker")
   if not workers:
     return None
 
   grid = state["grid"]
+  width = state.get("gridWidth", state["gridSize"])
+  height = state.get("gridHeight", state["gridSize"])
+  resources = resource_cells(state)
+
   for worker in workers:
-    for nx, nz in neighbors(worker["x"], worker["z"], state.get("gridWidth", state["gridSize"]), state.get("gridHeight", state["gridSize"])):
-      cell = grid[nx][nz]
-      if cell["type"] == "resource" and cell["gold"] > 0:
-        return worker["id"], nx, nz
+    for resource in resources:
+      if hex_distance(worker["x"], worker["z"], resource["x"], resource["z"]) == 1:
+        break
+    else:
+      targets = [
+        tile
+        for resource in resources
+        for tile in adjacent_mining_tiles(state, resource)
+      ]
+      if targets:
+        target_x, target_z = min(
+          targets,
+          key=lambda tile: hex_distance(worker["x"], worker["z"], tile[0], tile[1])
+        )
+        candidates = [
+          (nx, nz)
+          for nx, nz in neighbors(worker["x"], worker["z"], width, height)
+          if is_passable(grid[nx][nz])
+        ]
+        if candidates:
+          nx, nz = min(candidates, key=lambda tile: hex_distance(tile[0], tile[1], target_x, target_z))
+          return worker["id"], nx, nz
+
+  if resources:
+    return None
 
   worker = workers[0]
-  for nx, nz in neighbors(worker["x"], worker["z"], state.get("gridWidth", state["gridSize"]), state.get("gridHeight", state["gridSize"])):
-    if grid[nx][nz]["type"] not in ("base", "obstacle"):
+  for nx, nz in neighbors(worker["x"], worker["z"], width, height):
+    if is_passable(grid[nx][nz]):
       return worker["id"], nx, nz
   return None
 

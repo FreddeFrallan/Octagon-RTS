@@ -8,7 +8,7 @@
     "minRange": 0,
     "maxRange": 0,
     "moveSpeed": 1.0,
-    "description": "Can mine gold from resource tiles. Continuous Auto-Harvest.",
+    "description": "Can mine gold from adjacent resource tiles. Continuous Auto-Harvest.",
     "animation": {
       "size": 0.5,
       "color": "cyan",

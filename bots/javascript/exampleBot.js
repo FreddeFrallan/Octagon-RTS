@@ -60,9 +60,46 @@ function neighbors(x, z, gridSize = 8, gridHeight = gridSize) {
   return coords.filter(([nx, nz]) => nx >= 0 && nx < gridSize && nz >= 0 && nz < gridHeight);
 }
 
+function hexDistance(x1, z1, x2, z2) {
+  function offsetToCube(col, row) {
+    const x = col - Math.floor((row - (row & 1)) / 2);
+    const z = row;
+    const y = -x - z;
+    return [x, y, z];
+  }
+
+  const [ax, ay, az] = offsetToCube(x1, z1);
+  const [bx, by, bz] = offsetToCube(x2, z2);
+  return Math.max(Math.abs(ax - bx), Math.abs(ay - by), Math.abs(az - bz));
+}
+
+function isPassable(cell) {
+  return cell.type !== 'base' && cell.type !== 'obstacle' && cell.type !== 'resource';
+}
+
 function ownUnits(state, unitType) {
   return Object.values(state.units || {}).filter(unit => {
     return unit.owner === session.playerId && !unit.isMoving && (!unitType || unit.type === unitType);
+  });
+}
+
+function resourceCells(state) {
+  const cells = [];
+  for (const row of state.grid) {
+    for (const cell of row) {
+      if (cell.type === 'resource' && cell.gold > 0) {
+        cells.push(cell);
+      }
+    }
+  }
+  return cells;
+}
+
+function adjacentMiningTiles(state, resource) {
+  const width = state.gridWidth || state.gridSize;
+  const height = state.gridHeight || state.gridSize;
+  return neighbors(resource.x, resource.z, width, height).filter(([x, z]) => {
+    return isPassable(state.grid[x][z]);
   });
 }
 
@@ -70,18 +107,40 @@ function pickWorkerMove(state) {
   const workers = ownUnits(state, 'worker');
   if (workers.length === 0) return null;
 
+  const width = state.gridWidth || state.gridSize;
+  const height = state.gridHeight || state.gridSize;
+  const resources = resourceCells(state);
+
   for (const worker of workers) {
-    for (const [nx, nz] of neighbors(worker.x, worker.z, state.gridWidth || state.gridSize, state.gridHeight || state.gridSize)) {
-      const cell = state.grid[nx][nz];
-      if (cell.type === 'resource' && cell.gold > 0) {
-        return { unitId: worker.id, x: nx, z: nz };
+    if (resources.some(resource => hexDistance(worker.x, worker.z, resource.x, resource.z) === 1)) {
+      continue;
+    }
+
+    const targets = resources.flatMap(resource => adjacentMiningTiles(state, resource));
+    if (targets.length > 0) {
+      const [targetX, targetZ] = targets.reduce((best, tile) => {
+        return hexDistance(worker.x, worker.z, tile[0], tile[1]) < hexDistance(worker.x, worker.z, best[0], best[1])
+          ? tile
+          : best;
+      });
+
+      const candidates = neighbors(worker.x, worker.z, width, height).filter(([x, z]) => isPassable(state.grid[x][z]));
+      if (candidates.length > 0) {
+        const [x, z] = candidates.reduce((best, tile) => {
+          return hexDistance(tile[0], tile[1], targetX, targetZ) < hexDistance(best[0], best[1], targetX, targetZ)
+            ? tile
+            : best;
+        });
+        return { unitId: worker.id, x, z };
       }
     }
   }
 
+  if (resources.length > 0) return null;
+
   const worker = workers[0];
-  for (const [nx, nz] of neighbors(worker.x, worker.z, state.gridWidth || state.gridSize, state.gridHeight || state.gridSize)) {
-    if (state.grid[nx][nz].type !== 'base' && state.grid[nx][nz].type !== 'obstacle') {
+  for (const [nx, nz] of neighbors(worker.x, worker.z, width, height)) {
+    if (isPassable(state.grid[nx][nz])) {
       return { unitId: worker.id, x: nx, z: nz };
     }
   }

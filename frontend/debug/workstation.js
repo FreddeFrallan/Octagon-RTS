@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { createUnitObject } from '../objects/index.js';
+import { createBaseObject, createResourceObject, createUnitObject } from '../objects/index.js';
 
 const canvas = document.getElementById('workstation-canvas');
 const scene = new THREE.Scene();
@@ -55,22 +55,23 @@ ring.rotation.x = -Math.PI / 2;
 ring.position.y = 0.01;
 scene.add(ring);
 
-let activeUnit = null;
+let activeObject = null;
 let animations = [];
 let activeType = 'worker';
 const teamColor = new THREE.Color('#0077aa');
 
 function hasActiveUnit(unitId) {
-  return activeUnit?.userData.unitId === unitId;
+  return activeObject?.userData.unitId === unitId;
 }
 
-function renderUnit(type) {
-  if (activeUnit) {
-    scene.remove(activeUnit);
+function createDebugObject(type) {
+  if (type === 'base') {
+    return createBaseObject(teamColor);
   }
 
-  activeType = type;
-  animations = [];
+  if (type === 'resource') {
+    return createResourceObject(0, 0);
+  }
 
   const unit = {
     id: `debug_${type}`,
@@ -80,11 +81,23 @@ function renderUnit(type) {
     z: 0
   };
   const unitObject = createUnitObject(unit, teamColor, hasActiveUnit);
-  activeUnit = unitObject.group;
-  activeUnit.userData.unitId = unit.id;
-  activeUnit.position.set(0, 0.15, 0);
-  animations = unitObject.animations;
-  scene.add(activeUnit);
+  unitObject.group.userData.unitId = unit.id;
+  return unitObject;
+}
+
+function renderObject(type) {
+  if (activeObject) {
+    scene.remove(activeObject);
+  }
+
+  activeType = type;
+  animations = [];
+
+  const object = createDebugObject(type);
+  activeObject = object.group;
+  activeObject.position.set(0, 0.15, 0);
+  animations = object.animations;
+  scene.add(activeObject);
 
   document.querySelectorAll('.unit-button').forEach((button) => {
     button.classList.toggle('active', button.dataset.unitType === type);
@@ -92,7 +105,7 @@ function renderUnit(type) {
 }
 
 document.querySelectorAll('.unit-button').forEach((button) => {
-  button.addEventListener('click', () => renderUnit(button.dataset.unitType));
+  button.addEventListener('click', () => renderObject(button.dataset.unitType));
 });
 
 window.addEventListener('resize', () => {
@@ -105,12 +118,12 @@ function animate(timeMs) {
   const time = timeMs / 1000;
   requestAnimationFrame(animate);
   animations = animations.filter((animation) => !animation.update(time));
-  if (activeUnit) {
-    activeUnit.rotation.y += activeType === 'worker' ? 0.004 : 0.002;
+  if (activeObject) {
+    activeObject.rotation.y += activeType === 'worker' ? 0.004 : 0.002;
   }
   controls.update();
   renderer.render(scene, camera);
 }
 
-renderUnit(activeType);
+renderObject(activeType);
 animate(0);

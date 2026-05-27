@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { getHexNeighbors, getHexDistance } from './game.js';
-import { createUnitObject } from './objects/index.js';
+import { createBaseObject, createResourceObject, createUnitObject } from './objects/index.js';
 
 export class GameRenderer {
   constructor(canvasId, game) {
@@ -235,59 +235,18 @@ export class GameRenderer {
     if (this.baseMeshes.has(ownerId)) return;
 
     const pos = this.gridToWorld(x, z);
-    const group = new THREE.Group();
-    group.position.set(pos.x, pos.y, pos.z);
-
     const player = this.game.players[ownerId];
     const color = new THREE.Color(player.color);
-
-    const baseGeo = new THREE.CylinderGeometry(0.65, 0.75, 0.8, 6);
-    const baseMat = new THREE.MeshStandardMaterial({
-      color: 0xeeeeee,
-      roughness: 0.4,
-      metalness: 0.2
-    });
-    const baseMesh = new THREE.Mesh(baseGeo, baseMat);
-    baseMesh.position.y = 0.4;
-    baseMesh.castShadow = true;
-    baseMesh.receiveShadow = true;
-    group.add(baseMesh);
-
-    const coreGeo = new THREE.CylinderGeometry(0.45, 0.45, 0.1, 6);
-    const coreMat = new THREE.MeshBasicMaterial({
-      color: color,
-      transparent: true,
-      opacity: 0.9
-    });
-    const coreMesh = new THREE.Mesh(coreGeo, coreMat);
-    coreMesh.position.y = 0.85;
-    group.add(coreMesh);
-
-    const radarGroup = new THREE.Group();
-    radarGroup.position.set(0, 0.9, 0);
-
-    const pillarGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.3);
-    const pillar = new THREE.Mesh(pillarGeo, baseMat);
-    pillar.position.y = 0.15;
-    radarGroup.add(pillar);
-
-    const dishGeo = new THREE.ConeGeometry(0.32, 0.15, 6);
-    dishGeo.rotateX(Math.PI / 4);
-    const dish = new THREE.Mesh(dishGeo, baseMat);
-    dish.position.set(0, 0.35, -0.1);
-    dish.castShadow = true;
-    radarGroup.add(dish);
-
-    group.add(radarGroup);
+    const baseObject = createBaseObject(color);
+    const group = baseObject.group;
+    group.position.set(pos.x, pos.y, pos.z);
     this.scene.add(group);
 
     this.baseMeshes.set(ownerId, group);
-
-    this.animations.push({
-      update: (time) => {
-        radarGroup.rotation.y = time * 1.5;
-      }
+    baseObject.animations.forEach(animation => {
+      animation.id = `base_${ownerId}`;
     });
+    this.animations.push(...baseObject.animations);
 
     this.setTileOutlineColor(x, z, color);
   }
@@ -297,43 +256,16 @@ export class GameRenderer {
     if (this.crystalMeshes.has(coordStr)) return;
 
     const pos = this.gridToWorld(x, z);
-    const group = new THREE.Group();
+    const resourceObject = createResourceObject(x, z);
+    const group = resourceObject.group;
     group.position.set(pos.x, pos.y, pos.z);
-
-    // Render Gold Nugget clusters
-    const numNuggets = 4;
-    const goldGeo = new THREE.DodecahedronGeometry(0.16);
-    const goldMat = new THREE.MeshStandardMaterial({
-      color: 0xffaa00,
-      roughness: 0.1,
-      metalness: 0.9,
-      emissive: 0x553300,
-      emissiveIntensity: 0.4
-    });
-
-    for (let i = 0; i < numNuggets; i++) {
-      const mesh = new THREE.Mesh(goldGeo, goldMat);
-      const angle = (i / numNuggets) * Math.PI * 2 + Math.random() * 0.5;
-      const radius = 0.25 + Math.random() * 0.12;
-      const cx = Math.cos(angle) * radius;
-      const cz = Math.sin(angle) * radius;
-      
-      mesh.position.set(cx, 0.16, cz);
-      mesh.scale.set(1 + Math.random() * 0.4, 0.7 + Math.random() * 0.5, 1 + Math.random() * 0.4);
-      mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
-      mesh.castShadow = true;
-      group.add(mesh);
-    }
 
     this.scene.add(group);
     this.crystalMeshes.set(coordStr, group);
-
-    this.animations.push({
-      update: (time) => {
-        const pulse = 0.3 + 0.2 * Math.sin(time * 3 + (x + z) * 0.5);
-        goldMat.emissiveIntensity = pulse;
-      }
+    resourceObject.animations.forEach(animation => {
+      animation.id = `resource_${coordStr}`;
     });
+    this.animations.push(...resourceObject.animations);
 
     this.setTileOutlineColor(x, z, new THREE.Color(0xffaa00));
   }
@@ -541,6 +473,7 @@ export class GameRenderer {
           if (this.crystalMeshes.has(coordStr)) {
             const group = this.crystalMeshes.get(coordStr);
             this.scene.remove(group);
+            this.animations = this.animations.filter(anim => anim.id !== `resource_${coordStr}`);
             this.crystalMeshes.delete(coordStr);
             this.resetTileOutlineColor(x, z);
           }

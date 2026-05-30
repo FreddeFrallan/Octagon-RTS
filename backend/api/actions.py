@@ -1,7 +1,7 @@
 import random
 import time
 
-from config import UNITS_CONFIG
+from config import TECH_TREE_CONFIG, UNITS_CONFIG
 from hex_grid import get_hex_distance, get_neighbors
 from state import ROOMS, state_lock
 
@@ -24,6 +24,8 @@ def handle_action(data):
       success, error_msg = move_units(room, player_id, args)
     elif action_type == "build":
       success, error_msg = build_unit(room, player_id, args)
+    elif action_type == "upgrade":
+      success, error_msg = buy_upgrade(room, player_id, args)
     elif action_type == "attack":
       success, error_msg = set_artillery_target(room, player_id, args)
     elif action_type == "stop":
@@ -103,6 +105,41 @@ def build_unit(room, player_id, args):
   sx, sz = random.choice(spawn_spots)
   room.spawn_unit(utype, player_id, sx, sz)
   room.log(f"{player['name']} spawned {utype} at [{sx}, {sz}].", "build")
+  return True, ""
+
+
+def buy_upgrade(room, player_id, args):
+  upgrade_name = args.get("upgradeName")
+  if upgrade_name not in TECH_TREE_CONFIG:
+    return False, "Unknown tech upgrade"
+
+  upgrade = TECH_TREE_CONFIG[upgrade_name]
+  target_unit = upgrade.get("targetUnit")
+  target_property = upgrade.get("targetProperty")
+  if not target_unit or not target_property:
+    return False, "Invalid tech upgrade"
+
+  player = room.players[player_id]
+  if player["baseHp"] <= 0:
+    return False, "Base is destroyed"
+
+  cost = room.get_upgrade_cost(player_id, upgrade_name)
+  if player["crystals"] < cost:
+    return False, "Insufficient Gold"
+
+  player["crystals"] -= cost
+  upgrades = player.setdefault("techUpgrades", {})
+  upgrades[upgrade_name] = upgrades.get(upgrade_name, 0) + 1
+
+  for unit in room.units.values():
+    if unit.owner == player_id and unit.type == target_unit:
+      room.apply_upgrade_to_unit(unit, upgrade)
+
+  room.log(
+    f"{player['name']} upgraded {target_unit} {target_property} "
+    f"to level {upgrades[upgrade_name]}.",
+    "build"
+  )
   return True, ""
 
 

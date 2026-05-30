@@ -1,6 +1,6 @@
 import time
 
-from config import UNITS_CONFIG
+from config import TECH_TREE_CONFIG, UNITS_CONFIG
 from map_generator import initalize_map
 
 
@@ -113,7 +113,8 @@ class Room:
         "crystals": player_config.get("startingCrystals", 100),
         "baseHp": player_config.get("baseHp", 100),
         "maxBaseHp": player_config.get("maxBaseHp", player_config.get("baseHp", 100)),
-        "basePos": player_config.get("basePos", {"x": 0, "z": 0})
+        "basePos": player_config.get("basePos", {"x": 0, "z": 0}),
+        "techUpgrades": {}
       }
     self.winner = None
     self.grid_width = map_data.get("gridWidth", map_data.get("gridSize", 8))
@@ -151,8 +152,40 @@ class Room:
   def spawn_unit(self, utype, owner, x, z):
     uid = self.generate_unit_id()
     unit = Unit(uid, utype, owner, x, z)
+    self.apply_player_upgrades_to_unit(unit)
     self.units[uid] = unit
     return unit
+
+  def get_upgrade_level(self, player_id, upgrade_name):
+    return self.players[player_id].get("techUpgrades", {}).get(upgrade_name, 0)
+
+  def get_upgrade_cost(self, player_id, upgrade_name):
+    upgrade = TECH_TREE_CONFIG[upgrade_name]
+    level = self.get_upgrade_level(player_id, upgrade_name)
+    return upgrade.get("initialCost", 0) + (level * upgrade.get("costIncrease", 0))
+
+  def apply_player_upgrades_to_unit(self, unit):
+    player = self.players.get(unit.owner)
+    if not player:
+      return
+
+    for upgrade_name, level in player.get("techUpgrades", {}).items():
+      if level <= 0:
+        continue
+      upgrade = TECH_TREE_CONFIG.get(upgrade_name)
+      if not upgrade or upgrade.get("targetUnit") != unit.type:
+        continue
+      self.apply_upgrade_to_unit(unit, upgrade, level)
+
+  def apply_upgrade_to_unit(self, unit, upgrade, level=1):
+    prop = upgrade.get("targetProperty")
+    increase = upgrade.get("valueIncrease", 0) * level
+    if not hasattr(unit, prop):
+      return
+
+    setattr(unit, prop, getattr(unit, prop) + increase)
+    if prop == "maxHp":
+      unit.hp += increase
 
   def log(self, text, log_type="system"):
     entry = {"text": text, "type": log_type, "timestamp": int(time.time() * 1000)}
@@ -188,6 +221,7 @@ class Room:
       "mapMode": self.map_mode,
       "status": self.status,
       "winner": self.winner,
+      "techTree": TECH_TREE_CONFIG,
       "players": {str(k): v for k, v in self.players.items()},
       "gridSize": self.grid_size,
       "gridWidth": self.grid_width,

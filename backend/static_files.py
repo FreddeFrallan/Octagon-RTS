@@ -7,6 +7,8 @@ def translate_static_path(path):
   base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
   if parsed_path == "/units.json":
     return os.path.join(base_dir, "backend", "units.json")
+  if parsed_path == "/tech_tree.json":
+    return os.path.join(base_dir, "backend", "tech_tree.json")
   if parsed_path == "/map.json":
     return os.path.join(base_dir, "backend", "map.json")
 

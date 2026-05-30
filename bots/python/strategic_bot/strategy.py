@@ -93,6 +93,7 @@ class StrategicBot:
       self.combat_spend = 0
       self.last_unit_orders = {}
       self.last_artillery_targets = {}
+      self.combat_build_toggle = 0
 
     self.stop_event.clear()
     if not self.thread or not self.thread.is_alive():
@@ -158,6 +159,8 @@ class StrategicBot:
 
     actions_sent = 0
     if self.try_build(current, state):
+      actions_sent += 1
+    elif self.try_upgrade(current, state):
       actions_sent += 1
 
     economy_orders = self.plan_worker_orders(current, state)
@@ -258,6 +261,46 @@ class StrategicBot:
     if crystals >= UNIT_COSTS["artillery"]:
       return "artillery"
     return None
+
+  def try_upgrade(self, current, state):
+    player = state["players"][str(current["playerId"])]
+    crystals = player["crystals"]
+    if player["baseHp"] <= 0:
+      return False
+
+    upgrade_name = self.choose_upgrade(state, crystals, player.get("techUpgrades", {}))
+    if not upgrade_name:
+      return False
+
+    return self.action(current, "upgrade", {"upgradeName": upgrade_name})
+
+  def choose_upgrade(self, state, crystals, owned_levels):
+    tech_tree = state.get("techTree", {})
+    own_unit_types = {unit["type"] for unit in self.own_units(state)}
+    if not own_unit_types:
+      return None
+
+    property_priority = {"attack": 0, "maxHp": 1, "moveSpeed": 2}
+    candidates = []
+    for name, upgrade in tech_tree.items():
+      if upgrade.get("targetUnit") not in own_unit_types:
+        continue
+
+      level = owned_levels.get(name, 0)
+      cost = upgrade.get("initialCost", 0) + level * upgrade.get("costIncrease", 0)
+      if cost > crystals:
+        continue
+
+      candidates.append((
+        level,
+        property_priority.get(upgrade.get("targetProperty"), 99),
+        cost,
+        name
+      ))
+
+    if not candidates:
+      return None
+    return min(candidates)[3]
 
   def own_units(self, state, unit_type=None, stationary=False):
     units = [

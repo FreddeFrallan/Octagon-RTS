@@ -16,20 +16,106 @@ let unitsConfig = {
   artillery: { cost: 80, maxHp: 5, attack: 16, minRange: 1, maxRange: 2 }
 };
 window.UNITS_CONFIG = unitsConfig;
+let techTreeConfig = {};
 
 function updateUILabels() {
-  const wSpan = btnBuildWorker.querySelector('.cost');
-  if (wSpan && unitsConfig.worker) wSpan.innerText = `🪙 ${unitsConfig.worker.cost}`;
-  
-  const mSpan = btnBuildMech.querySelector('.cost');
-  if (mSpan && unitsConfig.mech) mSpan.innerText = `🪙 ${unitsConfig.mech.cost}`;
-  
-  const aSpan = btnBuildArtillery.querySelector('.cost');
-  if (aSpan && unitsConfig.artillery) aSpan.innerText = `🪙 ${unitsConfig.artillery.cost}`;
-
   const attackSpan = btnAttack.querySelector('.cost');
   if (attackSpan && unitsConfig.artillery) {
     attackSpan.innerText = `Range ${unitsConfig.artillery.minRange}-${unitsConfig.artillery.maxRange}`;
+  }
+}
+
+function labelFromKey(key) {
+  return key
+    .replace(/^upgrade_/, '')
+    .split('_')
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function techUpgradeCost(upgrade, level) {
+  return (upgrade.initialCost ?? 0) + (level * (upgrade.costIncrease ?? 0));
+}
+
+function createActionHeader(text) {
+  const header = document.createElement('div');
+  header.style.width = '100%';
+  header.style.fontFamily = 'var(--font-title)';
+  header.style.fontSize = '0.8rem';
+  header.style.color = 'var(--text-muted)';
+  header.style.textTransform = 'uppercase';
+  header.innerText = text;
+  return header;
+}
+
+function renderBaseActionButtons(player) {
+  buildOptionsContainer.innerHTML = '';
+  if (!baseActionMode) {
+    baseActionMode = 'units';
+  }
+
+  const unitsButton = document.createElement('button');
+  unitsButton.className = `btn base-action-tab ${baseActionMode === 'units' ? 'active' : ''}`;
+  unitsButton.innerText = 'Units';
+  unitsButton.addEventListener('click', () => {
+    baseActionMode = 'units';
+    updateHUD();
+  });
+  buildOptionsContainer.appendChild(unitsButton);
+
+  const techButton = document.createElement('button');
+  techButton.className = `btn base-action-tab ${baseActionMode === 'tech' ? 'active' : ''}`;
+  techButton.innerText = 'Tech Tree';
+  techButton.addEventListener('click', () => {
+    baseActionMode = 'tech';
+    updateHUD();
+  });
+  buildOptionsContainer.appendChild(techButton);
+
+  if (baseActionMode === 'units') {
+    renderUnitBuildButtons(player);
+  } else if (baseActionMode === 'tech') {
+    renderTechUpgradeButtons(player);
+  }
+}
+
+function renderUnitBuildButtons(player) {
+  buildOptionsContainer.appendChild(createActionHeader('Build Units'));
+  for (const unitType of ['worker', 'mech', 'artillery']) {
+    const unitConfig = unitsConfig[unitType] || {};
+    const cost = unitConfig.cost ?? 50;
+    const button = document.createElement('button');
+    button.className = 'btn btn-magenta';
+    button.disabled = !player || player.crystals < cost || player.baseHp <= 0;
+    button.innerText = `Build ${unitConfig.name || labelFromKey(unitType)}`;
+
+    const costSpan = document.createElement('span');
+    costSpan.className = 'cost';
+    costSpan.innerText = `🪙 ${cost}`;
+    button.appendChild(costSpan);
+
+    button.addEventListener('click', () => handleBuildAction(unitType));
+    buildOptionsContainer.appendChild(button);
+  }
+}
+
+function renderTechUpgradeButtons(player) {
+  buildOptionsContainer.appendChild(createActionHeader('Tech Upgrades'));
+  for (const [upgradeName, upgrade] of Object.entries(techTreeConfig)) {
+    const level = player?.techUpgrades?.[upgradeName] ?? 0;
+    const cost = techUpgradeCost(upgrade, level);
+    const button = document.createElement('button');
+    button.className = 'btn btn-magenta';
+    button.disabled = !player || player.crystals < cost || player.baseHp <= 0;
+    button.innerText = labelFromKey(upgradeName);
+
+    const costSpan = document.createElement('span');
+    costSpan.className = 'cost';
+    costSpan.innerText = `Level ${level} · +${upgrade.valueIncrease} ${upgrade.targetProperty} · 🪙 ${cost}`;
+    button.appendChild(costSpan);
+
+    button.addEventListener('click', () => handleUpgradeAction(upgradeName));
+    buildOptionsContainer.appendChild(button);
   }
 }
 
@@ -49,6 +135,7 @@ let gamePollInterval = null;
 // Game states
 let isMoveMode = false;
 let isAttackMode = false;
+let baseActionMode = null;
 let currentMapSettings = null;
 
 // DOM Elements - Lobby Screen
@@ -108,9 +195,6 @@ const btnGather = document.getElementById('action-gather');
 const btnAttack = document.getElementById('action-attack');
 const btnStopFire = document.getElementById('action-stop');
 const buildOptionsContainer = document.getElementById('build-options-container');
-const btnBuildWorker = document.getElementById('action-build-worker');
-const btnBuildMech = document.getElementById('action-build-mech');
-const btnBuildArtillery = document.getElementById('action-build-artillery');
 
 // Modals
 const instructionsModal = document.getElementById('instructions-modal');
@@ -176,9 +260,6 @@ function init() {
   // Bind HUD contextual actions
   btnAttack.addEventListener('click', handleAttackAction);
   btnStopFire.addEventListener('click', handleStopFireAction);
-  btnBuildWorker.addEventListener('click', () => handleBuildAction('worker'));
-  btnBuildMech.addEventListener('click', () => handleBuildAction('mech'));
-  btnBuildArtillery.addEventListener('click', () => handleBuildAction('artillery'));
 
   btnRestart.addEventListener('click', handleRestartLobby);
 
@@ -196,6 +277,16 @@ function init() {
     .catch(err => {
       console.warn("Failed to load units.json, using default stats:", err);
       updateUILabels();
+    });
+
+  fetch('/tech_tree.json')
+    .then(res => res.json())
+    .then(data => {
+      techTreeConfig = data;
+      if (game) updateHUD();
+    })
+    .catch(err => {
+      console.warn("Failed to load tech_tree.json:", err);
     });
 }
 
@@ -739,6 +830,11 @@ async function sendAction(actionName, args = {}) {
 }
 
 
+function handleUpgradeAction(upgradeName) {
+  if (botSessionActive) return;
+  sendAction("upgrade", { upgradeName });
+}
+
 function handleBuildAction(unitType) {
   if (botSessionActive) return;
   sendAction("build", { unitType });
@@ -849,6 +945,9 @@ function onCanvasClick(e) {
 
     // --- Normal Selection click logic ---
     const isAlreadySelected = game.selectedCell && game.selectedCell.x === x && game.selectedCell.z === z;
+    if (!isAlreadySelected) {
+      baseActionMode = null;
+    }
     game.selectedCell = { x, z };
     if (!isAlreadySelected) {
       game.selectAllUnitsInSelected(playerId);
@@ -881,6 +980,7 @@ function onCanvasClick(e) {
     }
     game.selectedCell = null;
     game.selectedUnitIds = [];
+    baseActionMode = null;
     renderer.updateSelection(null);
     updateHUD();
   }
@@ -974,13 +1074,12 @@ function handleRestartLobby() {
 
   // Clear render canvas contents
   if (renderer) {
-    renderer.unitMeshes.forEach(mesh => renderer.scene.remove(mesh));
-    renderer.crystalMeshes.forEach(mesh => renderer.scene.remove(mesh));
-    renderer.baseMeshes.forEach(mesh => renderer.scene.remove(mesh));
-    renderer.unitMeshes.clear();
-    renderer.crystalMeshes.clear();
-    renderer.baseMeshes.clear();
-    renderer.animations = [];
+    const canvasElement = document.getElementById('game-canvas');
+    canvasElement.removeEventListener('click', onCanvasClick);
+    canvasElement.removeEventListener('mousemove', onCanvasMouseMove);
+    canvasElement.removeEventListener('contextmenu', onCanvasRightClick);
+    renderer.dispose();
+    renderer = null;
   }
 
   // Clear timers
@@ -992,6 +1091,10 @@ function handleRestartLobby() {
   // Clear codes
   roomId = null;
   playerId = null;
+  game = null;
+  baseActionMode = null;
+  isMoveMode = false;
+  isAttackMode = false;
 }
 
 // --- HUD Refresh Panel ---
@@ -1125,13 +1228,7 @@ function updateHUD() {
     const isOwnBase = cell.type === 'base' && cell.owner === playerId;
     if (isOwnBase && !botSessionActive) {
       buildOptionsContainer.classList.remove('hidden');
-      
-      const costWorker = unitsConfig.worker?.cost ?? 50;
-      const costMech = unitsConfig.mech?.cost ?? 100;
-      const costArtillery = unitsConfig.artillery?.cost ?? 80;
-      btnBuildWorker.disabled = (player.crystals < costWorker || player.baseHp <= 0);
-      btnBuildMech.disabled = (player.crystals < costMech || player.baseHp <= 0);
-      btnBuildArtillery.disabled = (player.crystals < costArtillery || player.baseHp <= 0);
+      renderBaseActionButtons(player);
     } else {
       buildOptionsContainer.classList.add('hidden');
     }

@@ -77,7 +77,7 @@ def update_artillery(room, now_ms):
           continue
 
         unit.lastAttackTime = now_ms
-        damage = art_config.get("attack", 16)
+        damage = unit.attack
         shell_flight_ms = get_artillery_shell_flight_ms()
         room.pending_artillery_impacts.append({
           "type": "artillery_shell",

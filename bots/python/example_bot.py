@@ -174,6 +174,13 @@ def bot_loop():
       player = state["players"][str(current["playerId"])]
       if player["crystals"] >= 50:
         action("build", {"unitType": "worker"})
+      else:
+        worker_attack = state.get("techTree", {}).get("upgrade_worker_attack")
+        if worker_attack:
+          worker_attack_level = player.get("techUpgrades", {}).get("upgrade_worker_attack", 0)
+          cost = worker_attack.get("initialCost", 0) + worker_attack_level * worker_attack.get("costIncrease", 0)
+          if player["crystals"] >= cost:
+            action("upgrade", {"upgradeName": "upgrade_worker_attack"})
 
       move = pick_worker_move(state)
       if move:

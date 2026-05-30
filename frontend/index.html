@@ -213,20 +213,8 @@
           <span class="cost">Cancel Target Lock</span>
         </button>
 
-        <!-- Build options wrapped for contextual display -->
-        <div id="build-options-container" class="hidden" style="display: flex; gap: 15px;">
-          <button id="action-build-worker" class="btn btn-magenta">
-            Build Worker
-            <span class="cost">🪙 50</span>
-          </button>
-          <button id="action-build-mech" class="btn btn-magenta">
-            Build Mech
-            <span class="cost">🪙 100</span>
-          </button>
-          <button id="action-build-artillery" class="btn btn-magenta">
-            Build Artillery
-            <span class="cost">🪙 80</span>
-          </button>
+        <!-- Base action options wrapped for contextual display -->
+        <div id="build-options-container" class="hidden" style="display: flex; gap: 15px; flex-wrap: wrap;">
         </div>
       </div>
     </div>
@@ -238,7 +226,7 @@
         <p>Welcome, Commander. You control a base on a grid of hexagons. Your goal is to destroy the enemy base.</p>
         <ul>
           <li><strong>Real-Time Battles:</strong> The game is played in real-time. No turns! Multiple mechs, workers, and artillery can move and attack simultaneously.</li>
-          <li><strong>Bases:</strong> Your command base can build units. Build buttons appear <strong>only</strong> when you click your own base tile. Built units spawn at a random adjacent tile.</li>
+          <li><strong>Bases:</strong> Your command base can build units and buy tech upgrades. These buttons appear <strong>only</strong> when you click your own base tile.</li>
           <li><strong>Workers (🪙 50):</strong> Can mine gold from adjacent resource tiles. Move a worker next to a resource tile and they will automatically gather gold (gather 25 gold every 2s).</li>
           <li><strong>Mechs (🪙 100):</strong> Combat-heavy mechs (30 HP, 8 Attack). Move mechs to attack hostiles automatically.</li>
           <li><strong>Artillery (🪙 80):</strong> Long-range shelling platforms (5 HP, 15 Attack) with a 1-2 hex range. Right-click performs default movement. Click <strong>Artillery Fire</strong> to enter Attack Mode, coloring the 1-2 range cells <strong>red</strong>, and target any hex (including enemy bases). Can shell enemy bases from adjacent tiles.</li>

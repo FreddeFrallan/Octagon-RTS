@@ -156,6 +156,15 @@ async function botTick() {
 
     if (player.crystals >= 50) {
       await action('build', { unitType: 'worker' });
+    } else {
+      const workerAttack = state.techTree?.upgrade_worker_attack;
+      if (workerAttack) {
+        const workerAttackLevel = player.techUpgrades?.upgrade_worker_attack || 0;
+        const cost = (workerAttack.initialCost || 0) + workerAttackLevel * (workerAttack.costIncrease || 0);
+        if (player.crystals >= cost) {
+          await action('upgrade', { upgradeName: 'upgrade_worker_attack' });
+        }
+      }
     }
 
     const move = pickWorkerMove(state);

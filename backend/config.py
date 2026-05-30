@@ -2,17 +2,18 @@ import json
 import os
 
 
-def load_units_config():
+def load_json_config(filename):
   try:
-    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'units.json')
+    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), filename)
     with open(config_path, 'r') as f:
       return json.load(f)
   except Exception as e:
-    print(f"Error loading units.json: {e}")
+    print(f"Error loading {filename}: {e}")
     return {}
 
 
-UNITS_CONFIG = load_units_config()
+UNITS_CONFIG = load_json_config('units.json')
+TECH_TREE_CONFIG = load_json_config('tech_tree.json')
 
 
 def get_artillery_shell_flight_ms():

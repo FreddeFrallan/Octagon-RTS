@@ -365,6 +365,16 @@ body {
   box-shadow: 0 0 10px rgba(180, 83, 9, 0.3);
 }
 
+.base-action-tab {
+  min-width: 120px;
+}
+
+.base-action-tab.active {
+  border-color: var(--neon-amber);
+  color: var(--neon-amber);
+  background: rgba(245, 158, 11, 0.08);
+}
+
 /* Camera Overlay */
 #camera-controls {
   position: absolute;

@@ -27,6 +27,8 @@ export class GameRenderer {
     this.baseMeshes = new Map(); // playerId -> Group
     this.animations = []; // List of active animation objects
     this.lastFrameTimeMs = 0;
+    this.isDisposed = false;
+    this.animationFrameId = null;
 
     // Mouse interaction
     this.raycaster = new THREE.Raycaster();
@@ -727,7 +729,8 @@ export class GameRenderer {
   }
 
   animate(timeMs) {
-    requestAnimationFrame((t) => this.animate(t));
+    if (this.isDisposed) return;
+    this.animationFrameId = requestAnimationFrame((t) => this.animate(t));
     this.controls.update();
 
     const deltaSeconds = this.lastFrameTimeMs > 0 ? Math.min((timeMs - this.lastFrameTimeMs) / 1000, 0.1) : 0;
@@ -748,11 +751,33 @@ export class GameRenderer {
   }
 
   setupResizeHandler() {
-    window.addEventListener('resize', () => {
+    this.handleResize = () => {
       this.camera.aspect = window.innerWidth / window.innerHeight;
       this.camera.updateProjectionMatrix();
       this.renderer.setSize(window.innerWidth, window.innerHeight);
-    });
+    };
+    window.addEventListener('resize', this.handleResize);
+  }
+
+  dispose() {
+    this.isDisposed = true;
+    if (this.animationFrameId !== null) {
+      cancelAnimationFrame(this.animationFrameId);
+      this.animationFrameId = null;
+    }
+    if (this.handleResize) {
+      window.removeEventListener('resize', this.handleResize);
+    }
+    this.animations = [];
+    this.unitMeshes.clear();
+    this.crystalMeshes.clear();
+    this.baseMeshes.clear();
+    if (this.controls) {
+      this.controls.dispose();
+    }
+    if (this.renderer) {
+      this.renderer.dispose();
+    }
   }
 
   raycastTile(clientX, clientY) {

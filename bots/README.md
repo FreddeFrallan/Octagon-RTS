@@ -78,6 +78,21 @@ Action body:
 }
 ```
 
+Tech upgrade body:
+
+```json
+{
+  "roomId": "ABCD",
+  "playerId": 1,
+  "action": "upgrade",
+  "args": {
+    "upgradeName": "upgrade_worker_attack"
+  }
+}
+```
+
+Available upgrades are included in the polled state as `techTree`, and each player state includes purchased levels in `techUpgrades`.
+
 Run one of the examples, then use `http://127.0.0.1:8787` in the lobby bot URL field.
 
 Python example:

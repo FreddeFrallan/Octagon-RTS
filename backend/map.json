@@ -1,21 +1,21 @@
 {
   "width": {
-    "target": 10,
+    "target": 8,
     "min": 6,
     "max": 12
   },
   "height": {
-    "target": 6,
+    "target": 8,
     "min": 6,
     "max": 12
   },
   "numResources": {
-    "target": 11,
+    "target": 10,
     "min": 0,
     "max": 20
   },
   "numObsticale": {
-    "target": 0,
+    "target": 7,
     "min": 0,
     "max": 20
   },

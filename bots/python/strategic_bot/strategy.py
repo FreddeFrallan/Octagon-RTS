@@ -4,6 +4,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from collections import deque
 
 UNIT_COSTS = {
   "worker": 50,
@@ -65,10 +66,11 @@ def unit_priority(unit):
 
 
 class StrategicBot:
-  def __init__(self, name="Python Strategic Bot", max_actions_per_tick=6, verbose=True):
+  def __init__(self, name="Python Strategic Bot", max_actions_per_tick=6, verbose=True, worker_allocation=0.5):
     self.name = name
     self.max_actions_per_tick = max_actions_per_tick
     self.verbose = verbose
+    self.worker_allocation = max(0.0, min(worker_allocation, 1.0))
     self.session = None
     self.session_lock = threading.Lock()
     self.thread = None
@@ -226,14 +228,14 @@ class StrategicBot:
     total_spend = self.worker_spend + self.combat_spend
     worker_ratio = self.worker_spend / total_spend if total_spend else 0
 
-    if worker_ratio < 0.5 and crystals >= UNIT_COSTS["worker"]:
+    if worker_ratio < self.worker_allocation and crystals >= UNIT_COSTS["worker"]:
       return "worker"
 
     combat_choice = self.choose_combat_build(state, crystals)
     if combat_choice:
       return combat_choice
 
-    if crystals >= UNIT_COSTS["worker"] and worker_ratio < 0.6:
+    if crystals >= UNIT_COSTS["worker"] and worker_ratio < min(self.worker_allocation + 0.1, 1.0):
       return "worker"
     return None
 
@@ -286,16 +288,21 @@ class StrategicBot:
     orders = []
 
     for worker in workers:
-      target = self.choose_resource_target(worker, state, resources, enemies)
-      move = self.choose_worker_step(worker, state, target, enemies)
-      if move:
-        orders.append(self.move_order(worker["id"], move[0], move[1]))
+      current_enemy_distance = self.nearest_enemy_distance(worker["x"], worker["z"], enemies)
+      if current_enemy_distance > 2 and any(hex_distance(worker["x"], worker["z"], resource["x"], resource["z"]) == 1 for resource in resources):
+        continue
+
+      for target in self.choose_resource_targets(worker, state, resources, enemies):
+        move = self.choose_worker_step(worker, state, target, enemies)
+        if move:
+          orders.append(self.move_order(worker["id"], move[0], move[1]))
+          break
 
     return orders
 
-  def choose_resource_target(self, worker, state, resources, enemies):
+  def choose_resource_targets(self, worker, state, resources, enemies):
     if not resources:
-      return None
+      return []
 
     def score(cell):
       distance = hex_distance(worker["x"], worker["z"], cell["x"], cell["z"])
@@ -303,130 +310,125 @@ class StrategicBot:
       richness = cell["gold"] / max(1, cell["maxGold"])
       return distance + danger * 2 - richness
 
-    return min(resources, key=score)
+    return sorted(resources, key=score)
 
   def choose_worker_step(self, worker, state, target, enemies):
-    grid = state["grid"]
-    current_cell = grid[worker["x"]][worker["z"]]
     current_enemy_distance = self.nearest_enemy_distance(worker["x"], worker["z"], enemies)
 
     if target and hex_distance(worker["x"], worker["z"], target["x"], target["z"]) == 1 and current_enemy_distance > 2:
       return None
 
-    candidates = self.passable_neighbors(state, worker["x"], worker["z"])
-    if not candidates:
-      return None
+    if target:
+      return self.step_towards_any(state, worker, self.adjacent_passable_cells(state, target["x"], target["z"]))
 
-    current_resource_distance = hex_distance(worker["x"], worker["z"], target["x"], target["z"]) if target else 0
-
-    def score(coord):
-      x, z = coord
-      enemy_distance = self.nearest_enemy_distance(x, z, enemies)
-      resource_distance = hex_distance(x, z, target["x"], target["z"]) if target else 0
-      progress = current_resource_distance - resource_distance
-      resource_bonus = 3 if target and hex_distance(x, z, target["x"], target["z"]) == 1 else 0
-      danger_penalty = max(0, 4 - enemy_distance) * 3
-      safety_bonus = min(enemy_distance, 6) * 0.3
-      return progress * 5 - resource_distance + resource_bonus + safety_bonus - danger_penalty
-
-    best = max(candidates, key=score)
-    best_resource_distance = hex_distance(best[0], best[1], target["x"], target["z"]) if target else 0
-    if current_enemy_distance <= 2 or not target or best_resource_distance <= current_resource_distance:
-      return best
-    return None
+    return self.safest_passable_neighbor(state, worker, enemies)
 
   def plan_combat_orders(self, current, state):
     enemies = self.enemy_units(state)
-    if not enemies and not self.enemy_base_position(current):
+    base_target = self.enemy_base_target(current, state)
+    if not enemies and not base_target:
       return []
 
     orders = []
     for artillery in self.own_units(state, "artillery", stationary=True):
-      order = self.plan_artillery_order(current, state, artillery, enemies)
+      order = self.plan_artillery_order(current, state, artillery, enemies, base_target)
       if order:
         orders.append(order)
 
     for mech in self.own_units(state, "mech", stationary=True):
-      order = self.plan_mech_order(current, state, mech, enemies)
+      order = self.plan_mech_order(current, state, mech, enemies, base_target)
       if order:
         orders.append(order)
 
     return orders
 
-  def plan_artillery_order(self, current, state, artillery, enemies):
-    target = self.best_unit_target(artillery, enemies)
-    base_target = self.enemy_base_position(current)
-
+  def plan_artillery_order(self, current, state, artillery, enemies, base_target):
     in_range_targets = [
       enemy for enemy in enemies
       if 1 <= hex_distance(artillery["x"], artillery["z"], enemy["x"], enemy["z"]) <= 2
     ]
+    if base_target and 1 <= hex_distance(artillery["x"], artillery["z"], base_target["x"], base_target["z"]) <= 2:
+      in_range_targets.append(base_target)
+
     if in_range_targets:
-      target = self.best_unit_target(artillery, in_range_targets)
+      target = self.closest_target(artillery, in_range_targets)
       return self.attack_order(artillery["id"], target["x"], target["z"])
 
-    if base_target:
-      base_distance = hex_distance(artillery["x"], artillery["z"], base_target[0], base_target[1])
-      if 1 <= base_distance <= 2:
-        return self.attack_order(artillery["id"], base_target[0], base_target[1])
-
-    pursuit_target = target or ({"x": base_target[0], "z": base_target[1]} if base_target else None)
+    pursuit_target = self.closest_target(artillery, enemies + ([base_target] if base_target else []))
     if pursuit_target:
-      step = self.step_towards(state, artillery, pursuit_target["x"], pursuit_target["z"], keep_distance=2)
+      step = self.step_to_standoff(state, artillery, pursuit_target["x"], pursuit_target["z"], min_range=1, max_range=2)
       if step:
         return self.move_order(artillery["id"], step[0], step[1])
     return None
 
-  def plan_mech_order(self, current, state, mech, enemies):
-    target = self.best_unit_target(mech, enemies)
+  def plan_mech_order(self, current, state, mech, enemies, base_target):
+    target = self.closest_target(mech, enemies + ([base_target] if base_target else []))
     if target:
-      step = self.step_towards(state, mech, target["x"], target["z"], keep_distance=0)
+      keep_distance = 1 if target.get("type") == "base" else 0
+      step = self.step_towards(state, mech, target["x"], target["z"], keep_distance=keep_distance)
       if step:
         return self.move_order(mech["id"], step[0], step[1])
 
-    base_target = self.enemy_base_position(current)
-    if base_target:
-      step = self.step_towards(state, mech, base_target[0], base_target[1], keep_distance=1)
-      if step:
-        return self.move_order(mech["id"], step[0], step[1])
     return None
 
-  def best_unit_target(self, unit, enemies):
-    if not enemies:
+  def closest_target(self, unit, targets):
+    if not targets:
       return None
     return min(
-      enemies,
-      key=lambda enemy: (
-        unit_priority(enemy),
-        hex_distance(unit["x"], unit["z"], enemy["x"], enemy["z"]),
-        enemy["hp"]
+      targets,
+      key=lambda target: (
+        hex_distance(unit["x"], unit["z"], target["x"], target["z"]),
+        3 if target.get("type") == "base" else unit_priority(target),
+        target.get("hp", 999)
       )
     )
 
   def step_towards(self, state, unit, target_x, target_z, keep_distance=0):
-    current_distance = hex_distance(unit["x"], unit["z"], target_x, target_z)
-    candidates = self.passable_neighbors(state, unit["x"], unit["z"])
-    if not candidates:
-      return None
-
-    def score(coord):
-      x, z = coord
-      distance = hex_distance(x, z, target_x, target_z)
-      if keep_distance and distance < keep_distance:
-        return -100
-      return -abs(distance - keep_distance) if current_distance <= keep_distance else -distance
-
-    best = max(candidates, key=score)
-    best_distance = hex_distance(best[0], best[1], target_x, target_z)
     if keep_distance:
-      if current_distance == keep_distance:
-        return None
-      if abs(best_distance - keep_distance) < abs(current_distance - keep_distance):
-        return best
+      return self.step_to_standoff(state, unit, target_x, target_z, keep_distance, keep_distance)
+
+    return self.step_towards_any(state, unit, {(target_x, target_z)})
+
+  def step_to_standoff(self, state, unit, target_x, target_z, min_range, max_range):
+    current_distance = hex_distance(unit["x"], unit["z"], target_x, target_z)
+    if min_range <= current_distance <= max_range:
       return None
 
-    if best_distance < current_distance or best_distance == 0:
-      return best
+    goals = {
+      (x, z)
+      for x, z in self.all_passable_cells(state)
+      if min_range <= hex_distance(x, z, target_x, target_z) <= max_range
+    }
+    return self.step_towards_any(state, unit, goals)
+
+  def step_towards_any(self, state, unit, goals):
+    if not goals:
+      return None
+
+    start = (unit["x"], unit["z"])
+    if start in goals:
+      return None
+
+    visited = {start}
+    queue = deque()
+    for nx, nz in self.passable_neighbors(state, start[0], start[1]):
+      first_step = (nx, nz)
+      if first_step in goals:
+        return first_step
+      visited.add(first_step)
+      queue.append((first_step, first_step))
+
+    while queue:
+      (x, z), first_step = queue.popleft()
+      for nx, nz in self.passable_neighbors(state, x, z):
+        coord = (nx, nz)
+        if coord in visited:
+          continue
+        if coord in goals:
+          return first_step
+        visited.add(coord)
+        queue.append((coord, first_step))
+
     return None
 
   def resource_cells(self, state):
@@ -438,20 +440,51 @@ class StrategicBot:
     return cells
 
   def passable_neighbors(self, state, x, z):
-    grid = state["grid"]
     return [
       (nx, nz) for nx, nz in neighbors(x, z, state.get("gridWidth", state["gridSize"]), state.get("gridHeight", state["gridSize"]))
-      if grid[nx][nz]["type"] not in ("base", "obstacle")
-      and grid[nx][nz]["type"] != "resource"
+      if self.is_passable_cell(state, nx, nz)
     ]
+
+  def adjacent_passable_cells(self, state, x, z):
+    return {
+      (nx, nz)
+      for nx, nz in neighbors(x, z, state.get("gridWidth", state["gridSize"]), state.get("gridHeight", state["gridSize"]))
+      if self.is_passable_cell(state, nx, nz)
+    }
+
+  def all_passable_cells(self, state):
+    return [
+      (x, z)
+      for x in range(state.get("gridWidth", state["gridSize"]))
+      for z in range(state.get("gridHeight", state["gridSize"]))
+      if self.is_passable_cell(state, x, z)
+    ]
+
+  def is_passable_cell(self, state, x, z):
+    return state["grid"][x][z]["type"] not in ("base", "obstacle", "resource")
+
+  def safest_passable_neighbor(self, state, unit, enemies):
+    candidates = self.passable_neighbors(state, unit["x"], unit["z"])
+    if not candidates:
+      return None
+    return max(candidates, key=lambda coord: self.nearest_enemy_distance(coord[0], coord[1], enemies))
 
   def nearest_enemy_distance(self, x, z, enemies):
     if not enemies:
       return 99
     return min(hex_distance(x, z, enemy["x"], enemy["z"]) for enemy in enemies)
 
-  def enemy_base_position(self, current):
-    return (7, 7) if current["playerId"] == 1 else (0, 0)
+  def enemy_base_target(self, current, state):
+    for player_id, player in state.get("players", {}).items():
+      if int(player_id) != current["playerId"] and player.get("baseHp", 0) > 0:
+        base_pos = player["basePos"]
+        return {
+          "type": "base",
+          "x": base_pos["x"],
+          "z": base_pos["z"],
+          "hp": player.get("baseHp", 0)
+        }
+    return None
 
   def move_order(self, unit_id, x, z):
     return {

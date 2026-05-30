@@ -84,10 +84,20 @@ const guestSlotGuest = document.getElementById('guest-slot-guest');
 const guestMapMode = document.getElementById('guest-map-mode');
 
 // HUD Displays
-const activePlayerIndicator = document.getElementById('active-player-indicator');
-const activePlayerName = document.getElementById('active-player-name');
-const roleTag = document.getElementById('role-tag');
-const resourceCount = document.getElementById('resource-count');
+const ownPlayerPanel = document.getElementById('own-player-panel');
+const ownPlayerIndicator = document.getElementById('own-player-indicator');
+const ownPlayerName = document.getElementById('own-player-name');
+const ownRoleTag = document.getElementById('own-role-tag');
+const ownResourceCount = document.getElementById('own-resource-count');
+const ownUnitCount = document.getElementById('own-unit-count');
+const ownBaseHp = document.getElementById('own-base-hp');
+const opponentPlayerPanel = document.getElementById('opponent-player-panel');
+const opponentPlayerIndicator = document.getElementById('opponent-player-indicator');
+const opponentPlayerName = document.getElementById('opponent-player-name');
+const opponentRoleTag = document.getElementById('opponent-role-tag');
+const opponentResourceCount = document.getElementById('opponent-resource-count');
+const opponentUnitCount = document.getElementById('opponent-unit-count');
+const opponentBaseHp = document.getElementById('opponent-base-hp');
 const hudRoomCode = document.getElementById('hud-room-code');
 const selectionName = document.getElementById('selection-name');
 const selectionCoord = document.getElementById('selection-coord');
@@ -986,22 +996,55 @@ function handleRestartLobby() {
 
 // --- HUD Refresh Panel ---
 
+function updateTopPlayerPanel(elements, panelPlayerId, label) {
+  const player = game.players[panelPlayerId];
+  let unitCount = 0;
+  for (let x = 0; x < game.gridWidth; x++) {
+    for (let z = 0; z < game.gridHeight; z++) {
+      unitCount += game.grid[x][z].units.filter(unit => unit.owner === panelPlayerId).length;
+    }
+  }
+  const isP1 = panelPlayerId === 1;
+  const color = isP1 ? 'var(--neon-cyan)' : 'var(--neon-magenta)';
+  const shadow = isP1 ? 'rgba(0, 119, 170, 0.2)' : 'rgba(204, 0, 85, 0.2)';
+
+  elements.panel.className = `top-player-panel p${panelPlayerId}`;
+  elements.indicator.className = `player-indicator p${panelPlayerId}`;
+  elements.name.innerText = player?.name || (isP1 ? 'Cyan Sector' : 'Magenta Empire');
+  elements.name.style.color = color;
+  elements.name.style.textShadow = `0 0 10px ${shadow}`;
+  elements.role.innerText = label;
+  elements.role.style.color = color;
+  elements.resources.innerText = player?.crystals ?? 0;
+  elements.units.innerText = unitCount;
+  elements.baseHp.innerText = player ? `${player.baseHp}/${player.maxBaseHp}` : '0/0';
+}
+
 function updateHUD() {
   // Update role tags and player colors
-  const player = game.players[playerId];
-  activePlayerIndicator.className = `player-indicator p${playerId}`;
-  activePlayerName.innerText = player?.name || "Commander";
-  activePlayerName.style.color = playerId === 1 ? 'var(--neon-cyan)' : 'var(--neon-magenta)';
-  activePlayerName.style.textShadow = `0 0 10px ${playerId === 1 ? 'rgba(0, 119, 170, 0.2)' : 'rgba(204, 0, 85, 0.2)'}`;
-
-  roleTag.innerText = playerId === 1 ? "(Cyan Sector)" : "(Magenta Empire)";
-  if (botSessionActive) {
-    roleTag.innerText += " • Bot Control";
-  }
-  roleTag.style.color = playerId === 1 ? 'var(--neon-cyan)' : 'var(--neon-magenta)';
+  const opponentId = playerId === 1 ? 2 : 1;
+  const ownLabel = botSessionActive ? '(You • Bot)' : '(You)';
+  updateTopPlayerPanel({
+    panel: ownPlayerPanel,
+    indicator: ownPlayerIndicator,
+    name: ownPlayerName,
+    role: ownRoleTag,
+    resources: ownResourceCount,
+    units: ownUnitCount,
+    baseHp: ownBaseHp
+  }, playerId, ownLabel);
+  updateTopPlayerPanel({
+    panel: opponentPlayerPanel,
+    indicator: opponentPlayerIndicator,
+    name: opponentPlayerName,
+    role: opponentRoleTag,
+    resources: opponentResourceCount,
+    units: opponentUnitCount,
+    baseHp: opponentBaseHp
+  }, opponentId, '(Opponent)');
 
   hudRoomCode.innerText = roomId;
-  resourceCount.innerText = player?.crystals || 0; // Using backend .crystals field which holds gold balance
+  const player = game.players[playerId];
 
   // Context panels visibility controls
   const selectedCell = game.selectedCell;

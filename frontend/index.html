@@ -140,10 +140,17 @@
     
     <!-- Top Bar: Status and Resource Stats -->
     <div id="top-bar" class="hud-panel">
-      <div class="player-info">
-        <div id="active-player-indicator" class="player-indicator p1"></div>
-        <span id="active-player-name" class="turn-text" style="color: var(--neon-cyan)">Cyan Sector</span>
-        <span id="role-tag" style="font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); margin-left: 5px;">(Spectator)</span>
+      <div id="own-player-panel" class="top-player-panel p1">
+        <div class="top-player-header">
+          <div id="own-player-indicator" class="player-indicator p1"></div>
+          <span id="own-player-name" class="turn-text">Cyan Sector</span>
+          <span id="own-role-tag" class="role-tag">(You)</span>
+        </div>
+        <div class="top-player-stats">
+          <span><span class="stat-label">Gold</span> <span id="own-resource-count">100</span></span>
+          <span><span class="stat-label">Units</span> <span id="own-unit-count">0</span></span>
+          <span><span class="stat-label">Base</span> <span id="own-base-hp">100/100</span></span>
+        </div>
       </div>
       
       <div class="room-display">
@@ -151,9 +158,17 @@
         <span id="hud-room-code" class="room-id-badge">----</span>
       </div>
       
-      <div id="resource-container" class="resource-display">
-        <span class="resource-icon">🪙</span>
-        <span id="resource-count">100</span>
+      <div id="opponent-player-panel" class="top-player-panel p2">
+        <div class="top-player-header">
+          <span id="opponent-role-tag" class="role-tag">(Opponent)</span>
+          <span id="opponent-player-name" class="turn-text">Magenta Empire</span>
+          <div id="opponent-player-indicator" class="player-indicator p2"></div>
+        </div>
+        <div class="top-player-stats">
+          <span><span class="stat-label">Gold</span> <span id="opponent-resource-count">100</span></span>
+          <span><span class="stat-label">Units</span> <span id="opponent-unit-count">0</span></span>
+          <span><span class="stat-label">Base</span> <span id="opponent-base-hp">100/100</span></span>
+        </div>
       </div>
     </div>
 

@@ -2,10 +2,12 @@
 
 This bot is a larger example that balances two objectives every strategy tick:
 
-- Economy: workers prefer resource cells while choosing safer paths away from nearby enemies.
-- Damage: mechs and artillery prioritize enemy workers, then enemy combat units, then the enemy base.
+- Economy: workers path toward tiles adjacent to resource cells while choosing safer paths away from nearby enemies.
+- Damage: mechs and artillery target the closest enemy threat, including the enemy base.
 
-The build policy tracks what the bot has spent after a session starts and tries to keep roughly 50% of spending on workers and 50% on combat units. Combat spending alternates between mechs and artillery, with at least some artillery kept in the army.
+The build policy tracks what the bot has spent after a session starts and defaults to roughly 50% of spending on workers and 50% on combat units. Combat spending alternates between mechs and artillery, with at least some artillery kept in the army.
+
+Movement uses simple breadth-first pathfinding over passable tiles, so units can route around resources, bases, and obstacles instead of only moving greedily toward a target.
 
 Run it:
 
@@ -34,5 +36,14 @@ python3 bots/python/strategic_bot/run_bot.py --host 127.0.0.1 --port 8788 --name
 ```
 
 `--max-actions` limits how many build/move/attack orders the bot can send per tick. Lower it if you want a slower, easier-to-watch bot.
+
+Change worker versus attack spending:
+
+```bash
+python3 bots/python/strategic_bot/run_bot.py --worker-allocation 0.7
+python3 bots/python/strategic_bot/run_bot.py --worker-allocation 30
+```
+
+`--worker-allocation 0.7` means about 70% worker spending and 30% attack spending. Values can be ratios from `0` to `1`, or percentages from `0` to `100`.
 
 By default the bot prints accepted actions and rejected API calls. Use `--quiet` to suppress those logs.

@@ -1,8 +1,8 @@
 // app.js
 // Client Controller: coordinates lobby, real-time networking, logic, and 3D rendering (Bright Grass Theme)
 
-import { GameState, getHexDistance } from './game.js';
-import { GameRenderer } from './renderer.js';
+import { GameState, getHexDistance } from './game.js?v=tech-tree-2';
+import { GameRenderer } from './renderer.js?v=tech-tree-2';
 import * as THREE from 'three';
 
 let game = null;

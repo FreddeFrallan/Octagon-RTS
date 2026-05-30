@@ -3,6 +3,8 @@ import json
 import os
 import random
 
+import numpy as np
+
 from hex_grid import get_hex_distance, get_neighbors
 
 
@@ -40,8 +42,27 @@ DEFAULT_MAP = {
 }
 
 
-def initalize_map():
-  return copy.deepcopy(DEFAULT_MAP)
+PLAYER_DEFAULTS = {
+  1: {"basePos": {"x": 0, "z": 0}, "startingCrystals": 100, "baseHp": 100, "maxBaseHp": 100},
+  2: {"basePos": {"x": 7, "z": 7}, "startingCrystals": 100, "baseHp": 100, "maxBaseHp": 100},
+  3: {"basePos": {"x": 7, "z": 0}, "startingCrystals": 100, "baseHp": 100, "maxBaseHp": 100},
+  4: {"basePos": {"x": 0, "z": 7}, "startingCrystals": 100, "baseHp": 100, "maxBaseHp": 100}
+}
+
+
+def initalize_map(player_count=2):
+  map_data = copy.deepcopy(DEFAULT_MAP)
+  player_count = max(2, min(int(player_count), 4))
+  map_data["players"] = {
+    player_id: copy.deepcopy(PLAYER_DEFAULTS[player_id])
+    for player_id in range(1, player_count + 1)
+  }
+  map_data["startingUnits"] = generate_starting_units(
+    map_data["gridSize"],
+    map_data["gridSize"],
+    map_data["players"]
+  )
+  return map_data
 
 
 def load_random_map_settings():
@@ -51,7 +72,8 @@ def load_random_map_settings():
     "height": {"target": 8, "min": 6, "max": 12},
     "numResources": {"target": 8, "min": 0, "max": 20},
     "numObsticale": {"target": 6, "min": 0, "max": 20},
-    "randomPlayer": {"target": False, "options": [False, True]}
+    "randomPlayer": {"target": False, "options": [False, True]},
+    "fogOfWar": {"target": False, "options": [False, True]}
   }
   try:
     with open(settings_path, "r") as f:
@@ -123,7 +145,7 @@ def manhattan_distance(a, b):
   return abs(a["x"] - b["x"]) + abs(a["z"] - b["z"])
 
 
-def generate_random_map():
+def generate_random_map(player_count=2):
   settings = load_random_map_settings()
   if "gridSize" in settings:
     grid_size = setting_target(settings, "gridSize")
@@ -136,12 +158,15 @@ def generate_random_map():
 
   num_resources = int(setting_target(settings, "numResources", 8))
   num_obstacles = int(setting_target(settings, "numObsticale", setting_target(settings, "numObstacles", 0)))
-  player_configs = generate_player_configs(width, height, bool(setting_target(settings, "randomPlayer", False)))
+  player_count = max(2, min(int(player_count), 4))
+  player_configs = generate_player_configs(width, height, bool(setting_target(settings, "randomPlayer", False)), player_count)
   obstacles = generate_obstacles(width, height, player_configs, num_obstacles)
   resources = generate_balanced_resources(width, height, player_configs, num_resources, obstacles)
+  fog_of_war = bool(setting_target(settings, "fogOfWar", False))
 
   return {
-    "name": "RandomMap",
+    "name": "CustomMap",
+    "fogOfWar": fog_of_war,
     "gridSize": width,
     "gridWidth": width,
     "gridHeight": height,
@@ -152,61 +177,56 @@ def generate_random_map():
   }
 
 
-def generate_player_configs(width, height, random_player):
-  p1, p2 = farthest_cell_pair(width, height)
+def generate_player_configs(width, height, random_player, player_count=2):
+  positions = farthest_cell_set(width, height, player_count)
   if not random_player:
     return {
-      1: {
-        "basePos": p1,
-        "startingCrystals": 100,
-        "baseHp": 100,
-        "maxBaseHp": 100
-      },
-      2: {
-        "basePos": p2,
+      player_id: {
+        "basePos": positions[player_id - 1],
         "startingCrystals": 100,
         "baseHp": 100,
         "maxBaseHp": 100
       }
+      for player_id in range(1, player_count + 1)
     }
 
   all_cells = [{"x": x, "z": z} for x in range(width) for z in range(height)]
   for _ in range(500):
-    p1 = random.choice(all_cells)
-    p2 = random.choice(all_cells)
-    if p1 == p2:
-      continue
-    if manhattan_distance(p1, p2) < width + height - 4:
+    positions = random.sample(all_cells, player_count)
+    if min_pair_distance(positions) < max(3, min(width, height) // 2):
       continue
     return {
-      1: {
-        "basePos": p1,
-        "startingCrystals": 100,
-        "baseHp": 100,
-        "maxBaseHp": 100
-      },
-      2: {
-        "basePos": p2,
+      player_id: {
+        "basePos": positions[player_id - 1],
         "startingCrystals": 100,
         "baseHp": 100,
         "maxBaseHp": 100
       }
+      for player_id in range(1, player_count + 1)
     }
 
-  return generate_player_configs(width, height, False)
+  return generate_player_configs(width, height, False, player_count)
 
 
-def farthest_cell_pair(width, height):
-  cells = [{"x": x, "z": z} for x in range(width) for z in range(height)]
-  best_pair = (cells[0], cells[-1])
-  best_distance = -1
+def min_pair_distance(cells):
+  best = None
   for i, first in enumerate(cells):
     for second in cells[i + 1:]:
       distance = get_hex_distance(first["x"], first["z"], second["x"], second["z"])
-      if distance > best_distance:
-        best_distance = distance
-        best_pair = (first, second)
-  return {"x": best_pair[0]["x"], "z": best_pair[0]["z"]}, {"x": best_pair[1]["x"], "z": best_pair[1]["z"]}
+      best = distance if best is None else min(best, distance)
+  return best or 0
+
+
+def farthest_cell_set(width, height, count):
+  cells = [{"x": x, "z": z} for x in range(width) for z in range(height)]
+  selected = [cells[0]]
+  while len(selected) < count:
+    candidate = max(
+      (cell for cell in cells if cell not in selected),
+      key=lambda cell: min(get_hex_distance(cell["x"], cell["z"], other["x"], other["z"]) for other in selected)
+    )
+    selected.append(candidate)
+  return [{"x": cell["x"], "z": cell["z"]} for cell in selected]
 
 
 def generate_obstacles(width, height, player_configs, num_obstacles):
@@ -217,9 +237,28 @@ def generate_obstacles(width, height, player_configs, num_obstacles):
   if len(candidates) < num_obstacles:
     raise ValueError("Not enough valid obstacle cells for requested numObsticale")
 
-  for _ in range(2000):
-    selected = random.sample(candidates, num_obstacles)
-    if bases_are_connected(width, height, player_configs, selected):
+  for _ in range(10):
+    selected = []
+    available = list(candidates)
+
+    while len(selected) < num_obstacles:
+      placed = False
+      for _ in range(20):
+        if not available:
+          break
+
+        candidate = random.choice(available)
+        available.remove(candidate)
+        next_selected = selected + [candidate]
+        if bases_are_connected(width, height, player_configs, next_selected):
+          selected.append(candidate)
+          placed = True
+          break
+
+      if not placed:
+        break
+
+    if len(selected) == num_obstacles:
       return [{"x": cell["x"], "z": cell["z"]} for cell in selected]
 
   raise ValueError("Could not generate obstacles while preserving a path between bases")
@@ -268,20 +307,40 @@ def generate_balanced_resources(width, height, player_configs, num_resources, ob
   if len(candidates) < num_resources:
     raise ValueError("Not enough valid resource cells for requested numResources")
 
-  for _ in range(2000):
-    selected = random.sample(candidates, num_resources)
-    if resource_distance_diff(selected, player_configs) <= 3:
-      return [
-        {"x": cell["x"], "z": cell["z"], "gold": 200}
-        for cell in selected
-      ]
+  distance_vectors = resource_distance_vectors(candidates, player_configs)
+  random_count = num_resources // 2
+  greedy_count = num_resources - random_count
+  best = None
+  best_loss = None
 
-  best = min(
-    (random.sample(candidates, num_resources) for _ in range(500)),
-    key=lambda cells: resource_distance_diff(cells, player_configs)
-  )
-  if resource_distance_diff(best, player_configs) > 3:
-    raise ValueError("Could not generate a resource layout balanced within a Manhattan distance difference of 3")
+  for _ in range(100):
+    available = list(candidates)
+    selected = random.sample(available, random_count) if random_count else []
+    selected_total = sum_resource_vectors(selected, distance_vectors)
+    selected_coords = {(cell["x"], cell["z"]) for cell in selected}
+    available = [
+      cell for cell in available
+      if (cell["x"], cell["z"]) not in selected_coords
+    ]
+
+    for _ in range(greedy_count):
+      candidate = min(
+        available,
+        key=lambda cell: resource_distance_loss(
+          selected_total + distance_vectors[cell_coord(cell)]
+        )
+      )
+      selected.append(candidate)
+      selected_total = selected_total + distance_vectors[cell_coord(candidate)]
+      available.remove(candidate)
+
+    loss = resource_distance_loss(selected_total)
+    if best is None or loss < best_loss:
+      best = selected
+      best_loss = loss
+      if best_loss == 0:
+        break
+
   return [
     {"x": cell["x"], "z": cell["z"], "gold": 200}
     for cell in best
@@ -304,12 +363,41 @@ def resource_candidates(width, height, player_configs, obstacles):
   return candidates
 
 
+def cell_coord(cell):
+  return cell["x"], cell["z"]
+
+
+def resource_distance_vectors(candidates, player_configs):
+  players = list(player_configs.values())
+  return {
+    cell_coord(cell): np.array([
+      manhattan_distance(player["basePos"], cell)
+      for player in players
+    ], dtype=np.int16)
+    for cell in candidates
+  }
+
+
+def sum_resource_vectors(resources, distance_vectors):
+  if not resources:
+    vector_length = len(next(iter(distance_vectors.values()), []))
+    return np.zeros(vector_length, dtype=np.int32)
+  return np.sum(
+    np.array([distance_vectors[cell_coord(cell)] for cell in resources], dtype=np.int32),
+    axis=0
+  )
+
+
+def resource_distance_loss(total_distances):
+  if total_distances.size == 0:
+    return 0
+  return int(np.max(total_distances) - np.min(total_distances))
+
+
 def resource_distance_diff(resources, player_configs):
-  p1_base = player_configs[1]["basePos"]
-  p2_base = player_configs[2]["basePos"]
-  p1_total = sum(manhattan_distance(p1_base, resource) for resource in resources)
-  p2_total = sum(manhattan_distance(p2_base, resource) for resource in resources)
-  return abs(p1_total - p2_total)
+  candidates = resources if resources else [{"x": 0, "z": 0}]
+  distance_vectors = resource_distance_vectors(candidates, player_configs)
+  return resource_distance_loss(sum_resource_vectors(resources, distance_vectors))
 
 
 def generate_starting_units(width, height, player_configs):

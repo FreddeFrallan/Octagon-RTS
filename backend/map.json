@@ -1,26 +1,33 @@
 {
   "width": {
-    "target": 8,
+    "target": 11,
     "min": 6,
-    "max": 12
+    "max": 20
   },
   "height": {
-    "target": 8,
+    "target": 11,
     "min": 6,
-    "max": 12
+    "max": 20
   },
   "numResources": {
-    "target": 10,
+    "target": 20,
     "min": 0,
     "max": 20
   },
   "numObsticale": {
-    "target": 7,
+    "target": 6,
     "min": 0,
     "max": 20
   },
   "randomPlayer": {
     "target": false,
+    "options": [
+      false,
+      true
+    ]
+  },
+  "fogOfWar": {
+    "target": true,
     "options": [
       false,
       true

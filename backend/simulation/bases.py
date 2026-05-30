@@ -37,6 +37,5 @@ def update_base_attacks(room, now_ms):
         })
 
       if base_player["baseHp"] <= 0:
-        room.log(f"🏆 Base destroyed! Game over.")
-        room.status = "gameover"
-        room.winner = hostiles[0].owner
+        room.log(f"Base of {base_player['name']} destroyed!")
+        room.check_game_over()

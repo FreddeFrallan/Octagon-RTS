@@ -16,13 +16,13 @@ def resolve_artillery_impact(room, impact):
     hit_base = True
     base_owner = target_cell.owner
     base_player = room.players[base_owner]
+    was_alive = base_player["baseHp"] > 0
     base_player["baseHp"] = max(0, base_player["baseHp"] - damage)
     room.log(f"💥 Artillery shell impacts Base at [{tx}, {tz}] dealing {damage} damage!", "combat")
 
-    if base_player["baseHp"] <= 0:
+    if was_alive and base_player["baseHp"] <= 0:
       room.log(f"Base of {base_player['name']} destroyed!")
-      room.status = "gameover"
-      room.winner = attacker_owner
+      room.check_game_over()
 
   targets_here = [tu for tu in room.units.values() if tu.x == tx and tu.z == tz and not tu.isMoving]
   hit_any_unit = False

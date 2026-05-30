@@ -1,8 +1,8 @@
 // app.js
 // Client Controller: coordinates lobby, real-time networking, logic, and 3D rendering (Bright Grass Theme)
 
-import { GameState, getHexDistance } from './game.js?v=tech-tree-2';
-import { GameRenderer } from './renderer.js?v=tech-tree-2';
+import { GameState, getHexDistance, playerLabel } from './game.js?v=multiplayer-1';
+import { GameRenderer } from './renderer.js?v=multiplayer-1';
 import * as THREE from 'three';
 
 let game = null;
@@ -127,6 +127,7 @@ let playerName = "Commander";
 let apiBase = window.location.origin; // Dynamically updated on join
 let connectedBot = null;
 let botSessionActive = false;
+let hostPlayerCount = 2;
 
 // Polling intervals
 let lobbyPollInterval = null;
@@ -163,11 +164,10 @@ const botStatus = document.getElementById('bot-status');
 // Lobby Text Displays
 const hostRoomCode = document.getElementById('host-room-code');
 const hostServerIp = document.getElementById('host-server-ip');
-const slotHostName = document.getElementById('slot-host-name');
-const slotGuestName = document.getElementById('slot-guest-name');
+const hostPlayersList = document.getElementById('host-players-list');
 const guestRoomCode = document.getElementById('guest-room-code');
-const guestSlotHost = document.getElementById('guest-slot-host');
-const guestSlotGuest = document.getElementById('guest-slot-guest');
+const guestRoleLine = document.getElementById('guest-role-line');
+const guestPlayersList = document.getElementById('guest-players-list');
 const guestMapMode = document.getElementById('guest-map-mode');
 
 // HUD Displays
@@ -207,12 +207,18 @@ const endGameModal = document.getElementById('end-game-modal');
 const endTitle = document.getElementById('end-title');
 const endWinnerText = document.getElementById('end-winner-text');
 const btnRestart = document.getElementById('action-restart');
+const hostPlayerCountModal = document.getElementById('host-player-count-modal');
+const hostPlayerCountValue = document.getElementById('host-player-count-value');
+const hostPlayerCountMinus = document.getElementById('host-player-count-minus');
+const hostPlayerCountPlus = document.getElementById('host-player-count-plus');
+const cancelHostPlayerCount = document.getElementById('cancel-host-player-count');
+const confirmHostPlayerCount = document.getElementById('confirm-host-player-count');
 
 // --- Initialization ---
 
 function init() {
   // Bind lobby buttons
-  btnHostLobby.addEventListener('click', handleHostLobby);
+  btnHostLobby.addEventListener('click', showHostPlayerCountModal);
   btnJoinLobby.addEventListener('click', handleJoinLobby);
   btnStartGame.addEventListener('click', handleStartGame);
   btnConnectBot.addEventListener('click', handleConnectBot);
@@ -262,6 +268,10 @@ function init() {
   btnStopFire.addEventListener('click', handleStopFireAction);
 
   btnRestart.addEventListener('click', handleRestartLobby);
+  hostPlayerCountMinus.addEventListener('click', () => setHostPlayerCount(hostPlayerCount - 1));
+  hostPlayerCountPlus.addEventListener('click', () => setHostPlayerCount(hostPlayerCount + 1));
+  cancelHostPlayerCount.addEventListener('click', () => hostPlayerCountModal.classList.add('hidden'));
+  confirmHostPlayerCount.addEventListener('click', handleHostLobby);
 
   // Populate local IP suggestion in setup
   inputServerIp.value = window.location.host;
@@ -303,6 +313,42 @@ function normalizeBotUrl(url) {
   if (!trimmed) return 'http://127.0.0.1:8787';
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
   return `http://${trimmed}`;
+}
+
+function setHostPlayerCount(value) {
+  hostPlayerCount = Math.max(2, Math.min(4, Number(value)));
+  hostPlayerCountValue.innerText = String(hostPlayerCount);
+  hostPlayerCountMinus.disabled = hostPlayerCount <= 2;
+  hostPlayerCountPlus.disabled = hostPlayerCount >= 4;
+}
+
+function showHostPlayerCountModal() {
+  setHostPlayerCount(hostPlayerCount);
+  hostPlayerCountModal.classList.remove('hidden');
+}
+
+function playerColor(playerId) {
+  return game?.players?.[playerId]?.color || {
+    1: '#0077aa',
+    2: '#cc0055',
+    3: '#16a34a',
+    4: '#eab308'
+  }[playerId] || '#64748b';
+}
+
+function renderLobbyPlayers(container, players) {
+  container.innerHTML = '';
+  Object.entries(players).forEach(([playerIdText, player]) => {
+    const playerIdNumber = Number(playerIdText);
+    const row = document.createElement('div');
+    row.className = `player-slot ${player.name ? 'occupied' : ''}`;
+    row.style.borderColor = playerColor(playerIdNumber);
+    row.innerHTML = `
+      <span>${playerLabel(playerIdNumber)}${playerIdNumber === 1 ? ' (Host)' : ''}:</span>
+      <span>${player.name || 'Waiting for player...'}</span>
+    `;
+    container.appendChild(row);
+  });
 }
 
 async function postBot(path, payload) {
@@ -401,12 +447,13 @@ async function startConnectedBotSession() {
 async function handleHostLobby() {
   playerName = inputPlayerName.value.trim() || "Commander";
   apiBase = window.location.origin;
+  hostPlayerCountModal.classList.add('hidden');
 
   try {
     const res = await fetch(`${apiBase}/api/host`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ playerName })
+      body: JSON.stringify({ playerName, playerCount: hostPlayerCount })
     });
     
     if (!res.ok) throw new Error("Failed to create room");
@@ -423,7 +470,6 @@ async function handleHostLobby() {
     hostRoomCode.innerText = roomId;
     const serverPort = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
     hostServerIp.innerText = `${ipData.ip}:${serverPort}`;
-    slotHostName.innerText = playerName;
     await startConnectedBotSession();
     
     lobbySetup.classList.add('hidden');
@@ -467,10 +513,12 @@ async function handleJoinLobby() {
 
     const data = await res.json();
     roomId = data.roomId;
-    playerId = 2;
+    playerId = data.playerId;
 
     // Setup Guest UI state
     guestRoomCode.innerText = roomId;
+    guestRoleLine.innerText = `Role: ${playerLabel(playerId)} (P${playerId})`;
+    guestRoleLine.style.color = playerColor(playerId);
     await startConnectedBotSession();
     
     lobbySetup.classList.add('hidden');
@@ -498,7 +546,7 @@ async function handleStartGame() {
 }
 
 function mapModeLabel(mapMode) {
-  return mapMode === 'random' ? 'RandomMap' : 'StandardMap';
+  return mapMode === 'random' ? 'CustomMap' : 'StandardMap';
 }
 
 async function handleMapModeChange() {
@@ -539,7 +587,8 @@ function formatMapSettingLabel(key) {
     height: 'Height',
     numResources: 'Resources',
     numObsticale: 'Obstacles',
-    randomPlayer: 'Random Players'
+    randomPlayer: 'Random Players',
+    fogOfWar: 'Fog Of War'
   };
   return labels[key] || key;
 }
@@ -660,19 +709,12 @@ async function pollLobbyState() {
     mapModeSelect.value = currentMapMode;
     guestMapMode.innerText = mapModeLabel(currentMapMode);
     updateMapSettingsButton();
+    renderLobbyPlayers(hostPlayersList, data.players);
+    renderLobbyPlayers(guestPlayersList, data.players);
 
     if (playerId === 1) {
-      // Host: check if player 2 joined
-      const guestName = data.players[2]?.name;
-      if (guestName) {
-        slotGuestName.innerText = guestName;
-        slotGuestName.parentElement.classList.add('occupied');
-        btnStartGame.disabled = false; // enable play button
-      } else {
-        slotGuestName.innerText = "Waiting for player...";
-        slotGuestName.parentElement.classList.remove('occupied');
-        btnStartGame.disabled = true;
-      }
+      const allPlayersJoined = Object.values(data.players).every(player => player.name);
+      btnStartGame.disabled = !allPlayersJoined;
     }
 
     // Launch game screen if started
@@ -789,9 +831,9 @@ async function pollGameState() {
       
       const winnerName = game.players[game.winner]?.name || "Neutral";
       endWinnerText.innerText = `${winnerName.toUpperCase()} DOMINATES THE SECTOR`;
-      endWinnerText.style.color = game.winner === 1 ? 'var(--neon-cyan)' : 'var(--neon-magenta)';
+      endWinnerText.style.color = game.players[game.winner]?.color || playerColor(game.winner);
       endTitle.innerText = game.winner === playerId ? 'Victory Achieved' : 'Defeat Suffered';
-      endTitle.style.color = game.winner === playerId ? 'var(--neon-cyan)' : 'var(--neon-magenta)';
+      endTitle.style.color = game.winner === playerId ? playerColor(playerId) : (game.players[game.winner]?.color || playerColor(game.winner));
       endGameModal.classList.add('show');
     }
 
@@ -1107,13 +1149,13 @@ function updateTopPlayerPanel(elements, panelPlayerId, label) {
       unitCount += game.grid[x][z].units.filter(unit => unit.owner === panelPlayerId).length;
     }
   }
-  const isP1 = panelPlayerId === 1;
-  const color = isP1 ? 'var(--neon-cyan)' : 'var(--neon-magenta)';
-  const shadow = isP1 ? 'rgba(0, 119, 170, 0.2)' : 'rgba(204, 0, 85, 0.2)';
+  const color = player?.color || playerColor(panelPlayerId);
+  const shadow = color;
 
   elements.panel.className = `top-player-panel p${panelPlayerId}`;
   elements.indicator.className = `player-indicator p${panelPlayerId}`;
-  elements.name.innerText = player?.name || (isP1 ? 'Cyan Sector' : 'Magenta Empire');
+  elements.indicator.style.background = color;
+  elements.name.innerText = player?.name || playerLabel(panelPlayerId);
   elements.name.style.color = color;
   elements.name.style.textShadow = `0 0 10px ${shadow}`;
   elements.role.innerText = label;
@@ -1125,7 +1167,7 @@ function updateTopPlayerPanel(elements, panelPlayerId, label) {
 
 function updateHUD() {
   // Update role tags and player colors
-  const opponentId = playerId === 1 ? 2 : 1;
+  const opponentId = Number(Object.keys(game.players).find(id => Number(id) !== playerId)) || (playerId === 1 ? 2 : 1);
   const ownLabel = botSessionActive ? '(You • Bot)' : '(You)';
   updateTopPlayerPanel({
     panel: ownPlayerPanel,

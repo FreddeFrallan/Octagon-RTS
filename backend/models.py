@@ -1,6 +1,7 @@
 import time
 
 from config import TECH_TREE_CONFIG, UNITS_CONFIG
+from hex_grid import get_hex_distance
 from map_generator import initalize_map
 
 
@@ -84,14 +85,15 @@ class Cell:
 
 
 class Room:
-  def __init__(self, room_id, map_data=None, map_mode="standard"):
-    map_data = map_data or initalize_map()
+  def __init__(self, room_id, map_data=None, map_mode="standard", player_count=2):
+    self.player_count = max(2, min(int(player_count), 4))
+    map_data = map_data or initalize_map(self.player_count)
     self.id = room_id
     self.map_mode = map_mode
     self.status = "lobby"
     self.players = {}
     self.winner = None
-    self.event_queues = {1: [], 2: []}
+    self.event_queues = {}
     self.pending_artillery_impacts = []
     self.logs = []
     self.unit_counter = 0
@@ -105,6 +107,8 @@ class Room:
     }
 
     self.map_name = map_data.get("name", "Untitled Map")
+    self.player_count = len(map_data.get("players", {})) or self.player_count
+    self.fog_of_war = map_data.get("fogOfWar", False)
     self.players = {}
     for player_id, player_config in map_data.get("players", {}).items():
       player_id = int(player_id)
@@ -140,6 +144,7 @@ class Room:
 
     self.units = {}
     self.unit_counter = 0
+    self.event_queues = {player_id: [] for player_id in self.players}
 
     for unit in map_data.get("startingUnits", []):
       self.spawn_unit(unit["type"], unit["owner"], unit["x"], unit["z"])
@@ -194,11 +199,74 @@ class Room:
       self.logs.pop(0)
 
   def add_event(self, event):
-    self.event_queues[1].append(event)
-    self.event_queues[2].append(event)
+    for queue in self.event_queues.values():
+      queue.append(event)
+
+  def check_game_over(self):
+    if self.status == "gameover":
+      return True
+
+    alive_players = [
+      player_id for player_id, player in self.players.items()
+      if player.get("baseHp", 0) > 0
+    ]
+    if len(alive_players) == 1:
+      self.status = "gameover"
+      self.winner = alive_players[0]
+      self.log(f"Player {alive_players[0]} is the last commander standing.")
+      return True
+    return False
+
+  def visible_cells_for_player(self, player_id):
+    if not self.fog_of_war:
+      return {
+        (x, z)
+        for x in range(self.grid_width)
+        for z in range(self.grid_height)
+      }
+
+    sources = []
+    player = self.players.get(player_id)
+    if player:
+      base_pos = player["basePos"]
+      sources.append((base_pos["x"], base_pos["z"]))
+
+    for unit in self.units.values():
+      if unit.owner == player_id:
+        sources.append((unit.x, unit.z))
+
+    visible = set()
+    for x in range(self.grid_width):
+      for z in range(self.grid_height):
+        if any(get_hex_distance(x, z, sx, sz) <= 2 for sx, sz in sources):
+          visible.add((x, z))
+
+    for other_player_id, other_player in self.players.items():
+      if other_player_id != player_id:
+        base_pos = other_player["basePos"]
+        visible.add((base_pos["x"], base_pos["z"]))
+
+    return visible
+
+  def event_is_visible_to_player(self, event, visible_cells):
+    coords = []
+    if "x" in event and "z" in event:
+      coords.append((event["x"], event["z"]))
+    if "toX" in event and "toZ" in event:
+      coords.append((event["toX"], event["toZ"]))
+    if "fromX" in event and "fromZ" in event:
+      coords.append((event["fromX"], event["fromZ"]))
+    if "workerX" in event and "workerZ" in event:
+      coords.append((event["workerX"], event["workerZ"]))
+    return not coords or any(coord in visible_cells for coord in coords)
 
   def to_dict(self, player_id):
-    units = {uid: unit.to_dict() for uid, unit in self.units.items()}
+    visible_cells = self.visible_cells_for_player(player_id)
+    units = {
+      uid: unit.to_dict()
+      for uid, unit in self.units.items()
+      if unit.owner == player_id or (unit.x, unit.z) in visible_cells
+    }
     for unit_data in units.values():
       if unit_data["type"] == "artillery":
         unit_data["attackWillLand"] = None
@@ -206,6 +274,8 @@ class Room:
     for impact in self.pending_artillery_impacts:
       source_unit_id = impact.get("sourceUnitId")
       if source_unit_id in units:
+        if (impact["fromX"], impact["fromZ"]) not in visible_cells and (impact["toX"], impact["toZ"]) not in visible_cells:
+          continue
         units[source_unit_id]["attackWillLand"] = {
           "toX": impact["toX"],
           "toZ": impact["toZ"],
@@ -221,12 +291,19 @@ class Room:
       "mapMode": self.map_mode,
       "status": self.status,
       "winner": self.winner,
+      "fogOfWar": self.fog_of_war,
       "techTree": TECH_TREE_CONFIG,
       "players": {str(k): v for k, v in self.players.items()},
       "gridSize": self.grid_size,
       "gridWidth": self.grid_width,
       "gridHeight": self.grid_height,
-      "grid": [[c.to_dict() for c in row] for row in self.grid],
+      "grid": [
+        [
+          {**c.to_dict(), "visible": (c.x, c.z) in visible_cells}
+          for c in row
+        ]
+        for row in self.grid
+      ],
       "units": units,
       "logs": self.logs
     }

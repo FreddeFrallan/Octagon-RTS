@@ -8,7 +8,7 @@ from state import ROOMS, state_lock
 
 MAP_MODES = {
   "standard": "StandardMap",
-  "random": "RandomMap"
+  "random": "CustomMap"
 }
 
 
@@ -20,10 +20,8 @@ def get_rooms():
         "id": rid,
         "status": room.status,
         "mapMode": room.map_mode,
-        "players": {
-          "1": room.players[1]["name"],
-          "2": room.players[2]["name"]
-        }
+        "playerCount": room.player_count,
+        "players": {str(player_id): player["name"] for player_id, player in room.players.items()}
       })
   return rooms_list
 
@@ -44,9 +42,15 @@ def get_state(query_str):
       return None, "Room not found"
 
     room = ROOMS[room_id]
+    if player_id not in room.players:
+      return None, "Player not found"
     state = room.to_dict(player_id)
     if include_events:
-      events = list(room.event_queues[player_id])
+      visible_cells = room.visible_cells_for_player(player_id)
+      events = [
+        event for event in room.event_queues[player_id]
+        if room.event_is_visible_to_player(event, visible_cells)
+      ]
       room.event_queues[player_id] = []
       state["events"] = events
     else:
@@ -57,10 +61,11 @@ def get_state(query_str):
 
 def host_room(data):
   name = data.get("playerName", "Host")
+  player_count = max(2, min(int(data.get("playerCount", 2)), 4))
   room_id = str(uuid.uuid4())[:4].upper()
 
   with state_lock:
-    room = Room(room_id)
+    room = Room(room_id, player_count=player_count)
     room.players[1]["name"] = name
     ROOMS[room_id] = room
 
@@ -80,15 +85,20 @@ def join_room(data):
       return None, "Room code invalid"
 
     room = ROOMS[room_id]
-    if room.players[2]["name"] is not None:
+    open_slots = [
+      player_id for player_id, player in room.players.items()
+      if player_id != 1 and player["name"] is None
+    ]
+    if not open_slots:
       return None, "Room is full"
 
-    room.players[2]["name"] = name
-    room.log(f"Player 2 ({name}) joined.")
+    player_id = open_slots[0]
+    room.players[player_id]["name"] = name
+    room.log(f"Player {player_id} ({name}) joined.")
 
   return {
     "roomId": room_id,
-    "playerId": 2,
+    "playerId": player_id,
     "playerName": name
   }, None
 
@@ -104,12 +114,14 @@ def start_room(data):
     room = ROOMS[room_id]
     if player_id != 1:
       return None, "Only Host can start game"
+    if any(player["name"] is None for player in room.players.values()):
+      return None, "Waiting for all players to join"
 
     try:
       if room.map_mode == "random":
-        room.apply_map(generate_random_map())
+        room.apply_map(generate_random_map(room.player_count))
       else:
-        room.apply_map(initalize_map())
+        room.apply_map(initalize_map(room.player_count))
     except ValueError as e:
       return None, str(e)
 
@@ -162,11 +174,11 @@ def set_map_settings(data):
     if player_id != 1:
       return None, "Only Host can change map settings"
     if room.map_mode != "random":
-      return None, "Map settings are only available for RandomMap"
+      return None, "Map settings are only available for CustomMap"
 
     current = load_random_map_settings()
     updated = {**current, **settings}
     saved = save_random_map_settings(updated)
-    room.log("RandomMap settings updated.")
+    room.log("CustomMap settings updated.")
 
   return {"success": True, "settings": saved}, None

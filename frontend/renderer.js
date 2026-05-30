@@ -25,6 +25,7 @@ export class GameRenderer {
     this.unitMeshes = new Map(); // unitId -> Group
     this.crystalMeshes = new Map(); // cellCoordString (e.g. "x,z") -> Group (gold resource nodes)
     this.baseMeshes = new Map(); // playerId -> Group
+    this.fogMeshes = new Map(); // cellCoordString -> Mesh
     this.animations = []; // List of active animation objects
     this.lastFrameTimeMs = 0;
     this.isDisposed = false;
@@ -181,6 +182,22 @@ export class GameRenderer {
         outline.scale.set(0.96, 1.0, 0.96);
         outline.position.y = 0.001; 
         tileGroup.add(outline);
+
+        const fogGeometry = new THREE.CircleGeometry(this.HEX_RADIUS * 0.96, 6);
+        fogGeometry.rotateX(-Math.PI / 2);
+        const fogMaterial = new THREE.MeshBasicMaterial({
+          color: 0x1f2937,
+          transparent: true,
+          opacity: 0.62,
+          side: THREE.DoubleSide,
+          depthWrite: false
+        });
+        const fogMesh = new THREE.Mesh(fogGeometry, fogMaterial);
+        fogMesh.rotation.y = Math.PI / 6;
+        fogMesh.position.y = 0.22;
+        fogMesh.visible = cell.visible === false;
+        tileGroup.add(fogMesh);
+        this.fogMeshes.set(`${x},${z}`, fogMesh);
 
         this.scene.add(tileGroup);
         this.tileMeshes[x][z] = tileGroup;
@@ -417,6 +434,11 @@ export class GameRenderer {
     for (let x = 0; x < this.game.gridWidth; x++) {
       for (let z = 0; z < this.game.gridHeight; z++) {
         const cell = this.game.grid[x][z];
+        const fogMesh = this.fogMeshes.get(`${x},${z}`);
+        if (fogMesh) {
+          fogMesh.visible = cell.visible === false;
+        }
+
         cell.units.forEach(unit => {
           currentUnitIds.add(unit.id);
           let meshGroup = this.unitMeshes.get(unit.id);
@@ -468,6 +490,7 @@ export class GameRenderer {
           }
           
           const group = this.crystalMeshes.get(coordStr);
+          group.visible = cell.visible !== false;
           const scaleRatio = cell.gold / cell.maxGold;
           // Scale all nuggets down smoothly
           group.scale.set(scaleRatio, scaleRatio, scaleRatio);
@@ -772,6 +795,7 @@ export class GameRenderer {
     this.unitMeshes.clear();
     this.crystalMeshes.clear();
     this.baseMeshes.clear();
+    this.fogMeshes.clear();
     if (this.controls) {
       this.controls.dispose();
     }

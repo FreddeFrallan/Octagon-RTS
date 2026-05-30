@@ -32,6 +32,16 @@ export function getHexNeighbors(x, z, gridWidth = 8, gridHeight = gridWidth) {
   return neighbors;
 }
 
+export function playerLabel(playerId) {
+  const labels = {
+    1: 'Cyan Sector',
+    2: 'Magenta Empire',
+    3: 'Green Coalition',
+    4: 'Yellow League'
+  };
+  return labels[playerId] || `Player ${playerId}`;
+}
+
 export class Unit {
   constructor(id, type, owner, x, z) {
     this.id = id;
@@ -74,6 +84,7 @@ export class GameCell {
     this.owner = 0; // 0: neutral, 1: P1, 2: P2
     this.gold = 0;
     this.maxGold = 0;
+    this.visible = true;
     this.units = []; // List of Unit objects
   }
 }
@@ -86,7 +97,9 @@ export class GameState {
     this.grid = [];
     this.players = {
       1: { name: 'Host', color: '#0077aa', crystals: 100, baseHp: 100, maxBaseHp: 100, basePos: { x: 0, z: 0 } }, // crystals field represents gold
-      2: { name: 'Guest', color: '#cc0055', crystals: 100, baseHp: 100, maxBaseHp: 100, basePos: { x: 7, z: 7 } }
+      2: { name: 'Guest', color: '#cc0055', crystals: 100, baseHp: 100, maxBaseHp: 100, basePos: { x: 7, z: 7 } },
+      3: { name: 'Green', color: '#16a34a', crystals: 100, baseHp: 100, maxBaseHp: 100, basePos: { x: 7, z: 0 } },
+      4: { name: 'Yellow', color: '#eab308', crystals: 100, baseHp: 100, maxBaseHp: 100, basePos: { x: 0, z: 7 } }
     };
     this.selectedCell = null; // { x, z }
     this.selectedUnitIds = []; // Selected unit IDs on selected tile
@@ -127,18 +140,19 @@ export class GameState {
     }
     this.gameOver = (data.status === 'gameover');
     this.winner = data.winner;
+    this.fogOfWar = data.fogOfWar || false;
     this.logs = data.logs;
 
     // Unpack Player States
     for (const pidStr in data.players) {
       const pid = parseInt(pidStr);
       const serverPlayer = data.players[pidStr];
-      if (this.players[pid]) {
-        this.players[pid].name = serverPlayer.name || (pid === 1 ? 'Cyan Sector' : 'Magenta Empire');
-        this.players[pid].crystals = serverPlayer.crystals;
-        this.players[pid].baseHp = serverPlayer.baseHp;
-        this.players[pid].maxBaseHp = serverPlayer.maxBaseHp;
-      }
+      if (!this.players[pid]) this.players[pid] = { color: '#64748b' };
+      this.players[pid].name = serverPlayer.name || playerLabel(pid);
+      this.players[pid].crystals = serverPlayer.crystals;
+      this.players[pid].baseHp = serverPlayer.baseHp;
+      this.players[pid].maxBaseHp = serverPlayer.maxBaseHp;
+      this.players[pid].basePos = serverPlayer.basePos;
     }
 
     // Unpack Grid Cells
@@ -150,6 +164,7 @@ export class GameState {
         localCell.owner = serverCell.owner;
         localCell.gold = serverCell.gold;
         localCell.maxGold = serverCell.maxGold;
+        localCell.visible = serverCell.visible !== false;
         localCell.units = []; // Clear units to re-populate
       }
     }

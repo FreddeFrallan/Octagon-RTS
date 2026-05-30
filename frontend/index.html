@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Octo-Command: Neon Grid (Real-Time)</title>
-  <link rel="stylesheet" href="index.css?v=tech-tree-2">
+  <link rel="stylesheet" href="index.css?v=multiplayer-1">
   
   <!-- Import map for Three.js modules -->
   <script type="importmap">
@@ -65,15 +65,7 @@
             <span class="connection-info">Host IP: <span id="host-server-ip">loading...</span></span>
           </div>
           
-          <div class="players-list" style="margin: 20px 0;">
-            <div class="player-slot occupied p1">
-              <span>🔵 Cyan Sector (Host):</span>
-              <span id="slot-host-name">Waiting...</span>
-            </div>
-            <div class="player-slot p2" id="slot-guest-container">
-              <span>🔴 Magenta Empire (Guest):</span>
-              <span id="slot-guest-name">Waiting for player...</span>
-            </div>
+          <div class="players-list" id="host-players-list" style="margin: 20px 0;">
           </div>
 
           <div class="map-option-panel">
@@ -81,7 +73,7 @@
               <label for="map-mode-select">Map</label>
               <select id="map-mode-select" class="text-input">
                 <option value="standard">StandardMap</option>
-                <option value="random">RandomMap</option>
+                <option value="random">CustomMap</option>
               </select>
             </div>
             <button id="btn-map-settings" class="btn hidden" type="button">Map Settings</button>
@@ -95,18 +87,10 @@
           <div class="status-box">
             <span style="font-size: 0.85rem; text-transform: uppercase; color: var(--text-muted);">Joined Match Room</span>
             <span id="guest-room-code" style="font-family: var(--font-title); font-size: 2.2rem; font-weight: bold; color: var(--neon-amber);">----</span>
-            <span class="connection-info" style="color: var(--neon-magenta);">Role: Magenta Empire (P2)</span>
+            <span class="connection-info" id="guest-role-line" style="color: var(--neon-magenta);">Role: Magenta Empire (P2)</span>
           </div>
           
-          <div class="players-list" style="margin: 20px 0;">
-            <div class="player-slot occupied p1">
-              <span>🔵 Cyan Sector (Host):</span>
-              <span id="guest-slot-host">Connected</span>
-            </div>
-            <div class="player-slot occupied p2">
-              <span>🔴 Magenta Empire (Guest):</span>
-              <span id="guest-slot-guest">Connected</span>
-            </div>
+          <div class="players-list" id="guest-players-list" style="margin: 20px 0;">
           </div>
 
           <div class="map-option-panel">
@@ -133,6 +117,24 @@
           <button id="close-map-settings" class="cam-btn" type="button" title="Close">×</button>
         </div>
         <div id="map-settings-list" class="map-settings-list"></div>
+      </div>
+    </div>
+
+    <div id="host-player-count-modal" class="hidden">
+      <div class="map-settings-content">
+        <h2 class="panel-title">Host Game</h2>
+        <div class="map-setting-row">
+          <span>Players</span>
+          <div class="map-setting-stepper">
+            <button class="map-step-button" type="button" id="host-player-count-minus">‹</button>
+            <span class="map-setting-value" id="host-player-count-value">2</span>
+            <button class="map-step-button" type="button" id="host-player-count-plus">›</button>
+          </div>
+        </div>
+        <div style="display:flex; gap:12px; justify-content:flex-end; margin-top:20px;">
+          <button id="cancel-host-player-count" class="btn" type="button">Cancel</button>
+          <button id="confirm-host-player-count" class="btn btn-amber" type="button">Create Room</button>
+        </div>
       </div>
     </div>
 
@@ -248,6 +250,6 @@
   </div>
 
   <!-- Game Modules -->
-  <script type="module" src="app.js?v=tech-tree-2"></script>
+  <script type="module" src="app.js?v=multiplayer-1"></script>
 </body>
 </html>

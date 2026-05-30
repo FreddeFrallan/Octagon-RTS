@@ -548,7 +548,8 @@ select.text-input {
   cursor: pointer;
 }
 
-#map-settings-modal {
+#map-settings-modal,
+#host-player-count-modal {
   position: fixed;
   inset: 0;
   background: rgba(240, 243, 248, 0.75);
@@ -560,7 +561,8 @@ select.text-input {
   opacity: 1;
 }
 
-#map-settings-modal.hidden {
+#map-settings-modal.hidden,
+#host-player-count-modal.hidden {
   display: none;
 }
 

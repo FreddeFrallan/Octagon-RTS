@@ -158,6 +158,7 @@
       <div class="room-display">
         <span>Room:</span>
         <span id="hud-room-code" class="room-id-badge">----</span>
+        <button id="tech-tree-summary-btn" class="top-bar-button" type="button">Tech</button>
       </div>
       
       <div id="opponent-player-panel" class="top-player-panel p2">
@@ -171,6 +172,16 @@
           <span><span class="stat-label">Units</span> <span id="opponent-unit-count">0</span></span>
           <span><span class="stat-label">Base</span> <span id="opponent-base-hp">100/100</span></span>
         </div>
+      </div>
+    </div>
+
+    <div id="tech-tree-modal" class="hidden">
+      <div class="tech-tree-content">
+        <div class="modal-header-row">
+          <h2 class="panel-title">Tech Status</h2>
+          <button id="close-tech-tree" class="cam-btn" type="button" title="Close">×</button>
+        </div>
+        <div id="tech-tree-summary" class="tech-tree-summary"></div>
       </div>
     </div>
 

@@ -118,6 +118,7 @@ class Room:
         "baseHp": player_config.get("baseHp", 100),
         "maxBaseHp": player_config.get("maxBaseHp", player_config.get("baseHp", 100)),
         "basePos": player_config.get("basePos", {"x": 0, "z": 0}),
+        "ticks": 0,
         "techUpgrades": {}
       }
     self.winner = None

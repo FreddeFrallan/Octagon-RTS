@@ -37,6 +37,13 @@ function techUpgradeCost(upgrade, level) {
   return (upgrade.initialCost ?? 0) + (level * (upgrade.costIncrease ?? 0));
 }
 
+function techUpgradeEffectLabel(upgrade) {
+  if (upgrade.type === 'PassiveIncome') {
+    return `+${upgrade.valueIncrease ?? 0} gold/s`;
+  }
+  return `+${upgrade.valueIncrease} ${upgrade.targetProperty}`;
+}
+
 function createActionHeader(text) {
   const header = document.createElement('div');
   header.style.width = '100%';
@@ -111,7 +118,7 @@ function renderTechUpgradeButtons(player) {
 
     const costSpan = document.createElement('span');
     costSpan.className = 'cost';
-    costSpan.innerText = `Level ${level} · +${upgrade.valueIncrease} ${upgrade.targetProperty} · 🪙 ${cost}`;
+    costSpan.innerText = `Level ${level} · ${techUpgradeEffectLabel(upgrade)} · 🪙 ${cost}`;
     button.appendChild(costSpan);
 
     button.addEventListener('click', () => handleUpgradeAction(upgradeName));
@@ -186,6 +193,7 @@ const opponentResourceCount = document.getElementById('opponent-resource-count')
 const opponentUnitCount = document.getElementById('opponent-unit-count');
 const opponentBaseHp = document.getElementById('opponent-base-hp');
 const hudRoomCode = document.getElementById('hud-room-code');
+const techTreeSummaryBtn = document.getElementById('tech-tree-summary-btn');
 const selectionName = document.getElementById('selection-name');
 const selectionCoord = document.getElementById('selection-coord');
 const selectionUnitStack = document.getElementById('selection-unit-stack');
@@ -201,6 +209,9 @@ const instructionsModal = document.getElementById('instructions-modal');
 const mapSettingsModal = document.getElementById('map-settings-modal');
 const mapSettingsList = document.getElementById('map-settings-list');
 const closeMapSettingsBtn = document.getElementById('close-map-settings');
+const techTreeModal = document.getElementById('tech-tree-modal');
+const techTreeSummary = document.getElementById('tech-tree-summary');
+const closeTechTreeBtn = document.getElementById('close-tech-tree');
 const closeInstructionsBtn = document.getElementById('close-instructions');
 const toggleRulesBtn = document.getElementById('instructions-btn');
 const endGameModal = document.getElementById('end-game-modal');
@@ -254,6 +265,13 @@ function init() {
   mapSettingsModal.addEventListener('click', (ev) => {
     if (ev.target === mapSettingsModal) {
       mapSettingsModal.classList.add('hidden');
+    }
+  });
+  techTreeSummaryBtn.addEventListener('click', showTechTreeModal);
+  closeTechTreeBtn.addEventListener('click', () => techTreeModal.classList.add('hidden'));
+  techTreeModal.addEventListener('click', (ev) => {
+    if (ev.target === techTreeModal) {
+      techTreeModal.classList.add('hidden');
     }
   });
 
@@ -698,6 +716,84 @@ async function showMapSettingsModal() {
 }
 
 window.showMapSettingsModal = showMapSettingsModal;
+
+function renderTechTreeModal() {
+  if (!game) {
+    techTreeSummary.innerHTML = '<div class="tech-empty-state">No active match.</div>';
+    return;
+  }
+
+  const upgrades = Object.entries(techTreeConfig);
+  const playerEntries = (game.activePlayerIds || Object.keys(game.players).map(id => Number(id)))
+    .sort((a, b) => a - b)
+    .map(id => [String(id), game.players[id]])
+    .filter(([, player]) => player);
+
+  techTreeSummary.innerHTML = '';
+  if (playerEntries.length === 0) {
+    techTreeSummary.innerHTML = '<div class="tech-empty-state">No players loaded.</div>';
+    return;
+  }
+
+  playerEntries.forEach(([playerIdText, player]) => {
+    const playerIdNumber = Number(playerIdText);
+    const color = player.color || playerColor(playerIdNumber);
+    const card = document.createElement('section');
+    card.className = 'tech-player-card';
+    card.style.borderColor = color;
+
+    const header = document.createElement('div');
+    header.className = 'tech-player-header';
+    header.style.color = color;
+    const nameSpan = document.createElement('span');
+    nameSpan.textContent = player.name || playerLabel(playerIdNumber);
+    const ticksSpan = document.createElement('span');
+    ticksSpan.textContent = `Ticks ${player.ticks ?? 0}`;
+    header.append(nameSpan, ticksSpan);
+    card.appendChild(header);
+
+    const list = document.createElement('div');
+    list.className = 'tech-upgrade-list';
+
+    if (upgrades.length === 0) {
+      list.innerHTML = '<div class="tech-empty-state">Tech tree not loaded.</div>';
+    } else {
+      upgrades.forEach(([upgradeName, upgrade]) => {
+        const level = player.techUpgrades?.[upgradeName] ?? 0;
+        const nextCost = techUpgradeCost(upgrade, level);
+        const row = document.createElement('div');
+        row.className = 'tech-upgrade-row';
+        const labelBlock = document.createElement('div');
+        const name = document.createElement('span');
+        name.className = 'tech-upgrade-name';
+        name.textContent = labelFromKey(upgradeName);
+        const effect = document.createElement('span');
+        effect.className = 'tech-upgrade-effect';
+        effect.textContent = techUpgradeEffectLabel(upgrade);
+        labelBlock.append(name, effect);
+
+        const meta = document.createElement('div');
+        meta.className = 'tech-upgrade-meta';
+        const levelSpan = document.createElement('span');
+        levelSpan.textContent = `Lvl ${level}`;
+        const nextCostSpan = document.createElement('span');
+        nextCostSpan.textContent = `Next ${nextCost}`;
+        meta.append(levelSpan, nextCostSpan);
+
+        row.append(labelBlock, meta);
+        list.appendChild(row);
+      });
+    }
+
+    card.appendChild(list);
+    techTreeSummary.appendChild(card);
+  });
+}
+
+function showTechTreeModal() {
+  renderTechTreeModal();
+  techTreeModal.classList.remove('hidden');
+}
 
 // Polling while waiting inside the room lobby
 async function pollLobbyState() {
@@ -1189,6 +1285,9 @@ function updateHUD() {
   }, opponentId, '(Opponent)');
 
   hudRoomCode.innerText = roomId;
+  if (!techTreeModal.classList.contains('hidden')) {
+    renderTechTreeModal();
+  }
   const player = game.players[playerId];
 
   // Context panels visibility controls

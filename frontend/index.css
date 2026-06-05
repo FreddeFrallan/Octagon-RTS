@@ -216,6 +216,27 @@ body {
   font-weight: bold;
 }
 
+.top-bar-button {
+  border: 1px solid rgba(0, 119, 170, 0.25);
+  background: rgba(0, 119, 170, 0.06);
+  color: var(--neon-cyan);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-family: var(--font-title);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all var(--transition-speed);
+}
+
+.top-bar-button:hover {
+  background: var(--neon-cyan);
+  color: #fff;
+  box-shadow: 0 0 10px rgba(0, 119, 170, 0.25);
+}
+
 @media (max-width: 760px) {
   .room-display {
     font-size: 0.75rem;
@@ -223,6 +244,11 @@ body {
 
   .room-id-badge {
     padding: 2px 6px;
+  }
+
+  .top-bar-button {
+    padding: 4px 7px;
+    font-size: 0.62rem;
   }
 }
 
@@ -549,6 +575,7 @@ select.text-input {
 }
 
 #map-settings-modal,
+#tech-tree-modal,
 #host-player-count-modal {
   position: fixed;
   inset: 0;
@@ -562,17 +589,25 @@ select.text-input {
 }
 
 #map-settings-modal.hidden,
+#tech-tree-modal.hidden,
 #host-player-count-modal.hidden {
   display: none;
 }
 
-.map-settings-content {
+.map-settings-content,
+.tech-tree-content {
   background: var(--bg-panel);
   border: 1px solid var(--border-glow);
   border-radius: 8px;
   padding: 24px;
   width: min(520px, 92vw);
   box-shadow: 0 10px 40px rgba(15, 23, 42, 0.1);
+}
+
+.tech-tree-content {
+  width: min(980px, 94vw);
+  max-height: min(760px, 86vh);
+  overflow: hidden;
 }
 
 .modal-header-row {
@@ -586,6 +621,77 @@ select.text-input {
 .map-settings-list {
   display: grid;
   gap: 10px;
+}
+
+.tech-tree-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+  max-height: calc(86vh - 105px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.tech-player-card {
+  border: 1px solid rgba(0, 119, 170, 0.18);
+  background: rgba(255, 255, 255, 0.58);
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.tech-player-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  font-family: var(--font-title);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.tech-upgrade-list {
+  display: grid;
+  gap: 8px;
+}
+
+.tech-upgrade-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 7px;
+  padding: 8px 10px;
+}
+
+.tech-upgrade-name,
+.tech-upgrade-meta {
+  font-family: var(--font-title);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.tech-upgrade-effect {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.tech-upgrade-meta {
+  display: grid;
+  gap: 3px;
+  color: var(--neon-amber);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.tech-empty-state {
+  color: var(--text-muted);
+  font-size: 0.9rem;
 }
 
 .map-setting-row {

@@ -106,6 +106,7 @@ export class GameState {
     this.logs = [];
     this.gameOver = false;
     this.winner = null;
+    this.activePlayerIds = [1, 2];
 
     this.initGrid();
   }
@@ -142,6 +143,7 @@ export class GameState {
     this.winner = data.winner;
     this.fogOfWar = data.fogOfWar || false;
     this.logs = data.logs;
+    this.activePlayerIds = Object.keys(data.players).map(pid => Number(pid));
 
     // Unpack Player States
     for (const pidStr in data.players) {
@@ -153,6 +155,8 @@ export class GameState {
       this.players[pid].baseHp = serverPlayer.baseHp;
       this.players[pid].maxBaseHp = serverPlayer.maxBaseHp;
       this.players[pid].basePos = serverPlayer.basePos;
+      this.players[pid].ticks = serverPlayer.ticks ?? 0;
+      this.players[pid].techUpgrades = serverPlayer.techUpgrades || {};
     }
 
     // Unpack Grid Cells

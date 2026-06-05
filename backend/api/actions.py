@@ -114,10 +114,17 @@ def buy_upgrade(room, player_id, args):
     return False, "Unknown tech upgrade"
 
   upgrade = TECH_TREE_CONFIG[upgrade_name]
-  target_unit = upgrade.get("targetUnit")
-  target_property = upgrade.get("targetProperty")
-  if not target_unit or not target_property:
-    return False, "Invalid tech upgrade"
+  upgrade_type = upgrade.get("type", "UnitStat")
+  if upgrade_type == "UnitStat":
+    target_unit = upgrade.get("targetUnit")
+    target_property = upgrade.get("targetProperty")
+    if not target_unit or not target_property:
+      return False, "Invalid tech upgrade"
+  elif upgrade_type == "PassiveIncome":
+    if upgrade.get("valueIncrease", 0) <= 0:
+      return False, "Invalid passive income upgrade"
+  else:
+    return False, "Unknown tech upgrade type"
 
   player = room.players[player_id]
   if player["baseHp"] <= 0:
@@ -131,15 +138,22 @@ def buy_upgrade(room, player_id, args):
   upgrades = player.setdefault("techUpgrades", {})
   upgrades[upgrade_name] = upgrades.get(upgrade_name, 0) + 1
 
-  for unit in room.units.values():
-    if unit.owner == player_id and unit.type == target_unit:
-      room.apply_upgrade_to_unit(unit, upgrade)
+  if upgrade_type == "UnitStat":
+    for unit in room.units.values():
+      if unit.owner == player_id and unit.type == target_unit:
+        room.apply_upgrade_to_unit(unit, upgrade)
 
-  room.log(
-    f"{player['name']} upgraded {target_unit} {target_property} "
-    f"to level {upgrades[upgrade_name]}.",
-    "build"
-  )
+    room.log(
+      f"{player['name']} upgraded {target_unit} {target_property} "
+      f"to level {upgrades[upgrade_name]}.",
+      "build"
+    )
+  elif upgrade_type == "PassiveIncome":
+    room.log(
+      f"{player['name']} upgraded passive income "
+      f"to level {upgrades[upgrade_name]}.",
+      "build"
+    )
   return True, ""
 
 

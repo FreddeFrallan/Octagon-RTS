@@ -16,6 +16,7 @@ COMBAT_TYPES = {"mech", "artillery"}
 POWER_TOWER_TYPE = "powerTower"
 DEFENSIVE_POWER_TOWER_COUNT = 1
 DEFENSIVE_POWER_TOWER_RADIUS = 3
+ENEMY_POWER_TOWER_AVOID_RADIUS = 1
 ARTILLERY_SHELL_FLIGHT_SECONDS = 1.0
 
 
@@ -584,21 +585,28 @@ class OffensiveBot:
     def score(cell):
       distance = hex_distance(worker["x"], worker["z"], cell["x"], cell["z"])
       danger = max(0, 4 - self.nearest_enemy_distance(cell["x"], cell["z"], enemies))
+      tower_danger = 8 if self.is_enemy_power_tower_zone(state, cell["x"], cell["z"]) else 0
       richness = cell["gold"] / max(1, cell["maxGold"])
-      return distance + danger * 2 - richness
+      return distance + danger * 2 + tower_danger - richness
 
     return sorted(resources, key=score)
 
   def choose_worker_step(self, worker, state, target, enemies):
     current_enemy_distance = self.nearest_enemy_distance(worker["x"], worker["z"], enemies)
 
-    if target and hex_distance(worker["x"], worker["z"], target["x"], target["z"]) == 1 and current_enemy_distance > 2:
+    if (
+      target
+      and hex_distance(worker["x"], worker["z"], target["x"], target["z"]) == 1
+      and current_enemy_distance > 2
+      and not self.is_enemy_power_tower_zone(state, worker["x"], worker["z"])
+    ):
       return None
 
     if target:
-      return self.step_towards_any(state, worker, self.adjacent_passable_cells(state, target["x"], target["z"]))
+      goals = self.adjacent_passable_cells(state, target["x"], target["z"], avoid_enemy_towers=True)
+      return self.step_towards_any(state, worker, goals, avoid_enemy_towers=True)
 
-    return self.safest_passable_neighbor(state, worker, enemies)
+    return self.safest_passable_neighbor(state, worker, enemies, avoid_enemy_towers=True)
 
   def plan_combat_orders(self, current, state):
     base_target = self.enemy_base_target(current, state)
@@ -656,7 +664,7 @@ class OffensiveBot:
     leader = squad["units"][0]
     nearby_enemy = self.nearby_mech_attack_target(state, leader, max_steps=3)
     if nearby_enemy:
-      step = self.step_towards_any(state, leader, {(nearby_enemy["x"], nearby_enemy["z"])})
+      step = self.step_towards_any(state, leader, {(nearby_enemy["x"], nearby_enemy["z"])}, avoid_enemy_towers=True)
       if step:
         return self.move_order(leader["id"], step[0], step[1])
 
@@ -664,7 +672,7 @@ class OffensiveBot:
     if blocking_enemy:
       return self.move_order(leader["id"], blocking_enemy["x"], blocking_enemy["z"])
 
-    step = self.step_towards(state, leader, base_target["x"], base_target["z"], keep_distance=1)
+    step = self.step_towards(state, leader, base_target["x"], base_target["z"], keep_distance=1, avoid_enemy_towers=True)
     if step:
       unit_ids = [unit["id"] for unit in squad["units"]]
       return self.move_order(unit_ids, step[0], step[1])
@@ -678,6 +686,10 @@ class OffensiveBot:
     mech = next((unit for unit in squad["units"] if unit["type"] == "mech"), None)
     if not artillery or not mech:
       return None
+
+    tower_target = self.artillery_power_tower_target(state, artillery)
+    if tower_target:
+      return self.attack_order(artillery["id"], tower_target["x"], tower_target["z"])
 
     blocking_target = self.artillery_target_in_way(state, artillery, self.sneaky_artillery_goals(state, artillery, base_target))
     if blocking_target:
@@ -695,26 +707,33 @@ class OffensiveBot:
 
     mech_goals = goals
     if hex_distance(mech["x"], mech["z"], artillery["x"], artillery["z"]) > 1:
-      mech_goals = {(artillery["x"], artillery["z"])} | self.adjacent_passable_cells(state, artillery["x"], artillery["z"])
+      mech_goals = {(artillery["x"], artillery["z"])} | self.adjacent_passable_cells(
+        state,
+        artillery["x"],
+        artillery["z"],
+        avoid_enemy_towers=True
+      )
     blocking_enemy = self.enemy_in_way(state, mech, mech_goals)
     if blocking_enemy:
       orders.append(self.move_order(mech["id"], blocking_enemy["x"], blocking_enemy["z"]))
       return orders
 
-    mech_step = self.step_towards_any(state, mech, mech_goals)
+    mech_step = self.step_towards_any(state, mech, mech_goals, avoid_enemy_towers=True)
     if mech_step:
       orders.append(self.move_order(mech["id"], mech_step[0], mech_step[1]))
 
     return orders
 
   def enemy_in_way(self, state, unit, goals):
-    best_step = self.step_towards_any(state, unit, goals)
+    best_step = self.step_towards_any(state, unit, goals, avoid_enemy_towers=True)
     if not best_step:
       return None
 
     candidates = [
       enemy for enemy in self.enemy_units(state)
-      if not enemy.get("isMoving") and hex_distance(unit["x"], unit["z"], enemy["x"], enemy["z"]) == 1
+      if enemy["type"] != POWER_TOWER_TYPE
+      and not enemy.get("isMoving")
+      and hex_distance(unit["x"], unit["z"], enemy["x"], enemy["z"]) == 1
     ]
     if not candidates:
       return None
@@ -731,7 +750,9 @@ class OffensiveBot:
   def nearby_mech_attack_target(self, state, mech, max_steps=3):
     candidates = []
     for enemy in self.enemy_units(state):
-      path_steps = self.path_distance(state, mech, enemy["x"], enemy["z"], max_steps)
+      if enemy["type"] == POWER_TOWER_TYPE:
+        continue
+      path_steps = self.path_distance(state, mech, enemy["x"], enemy["z"], max_steps, avoid_enemy_towers=True)
       if path_steps is None:
         continue
       candidates.append((path_steps, unit_priority(enemy), enemy.get("hp", 999), enemy.get("id", ""), enemy))
@@ -753,7 +774,7 @@ class OffensiveBot:
       target_x, target_z = target_square
       candidates.append((
         hex_distance(target_x, target_z, best_step[0], best_step[1]),
-        unit_priority(enemy),
+        self.artillery_target_priority(enemy),
         enemy.get("hp", 999),
         enemy.get("id", ""),
         enemy,
@@ -766,6 +787,24 @@ class OffensiveBot:
     _, _, _, _, target, target_square = min(candidates, key=lambda candidate: candidate[:4])
     target_x, target_z = target_square
     return {**target, "x": target_x, "z": target_z}
+
+  def artillery_power_tower_target(self, state, artillery):
+    targets = [
+      tower for tower in self.enemy_units(state, POWER_TOWER_TYPE, stationary=True)
+      if self.is_valid_artillery_target(state, artillery, tower["x"], tower["z"])
+    ]
+    if not targets:
+      return None
+    return min(targets, key=lambda tower: (
+      hex_distance(artillery["x"], artillery["z"], tower["x"], tower["z"]),
+      tower.get("hp", 999),
+      tower.get("id", "")
+    ))
+
+  def artillery_target_priority(self, enemy):
+    if enemy["type"] == POWER_TOWER_TYPE:
+      return -1
+    return unit_priority(enemy)
 
   def artillery_target_square(self, state, artillery, target_unit):
     current = (target_unit["x"], target_unit["z"])
@@ -885,25 +924,33 @@ class OffensiveBot:
       return None
     return min(units, key=lambda candidate: hex_distance(unit["x"], unit["z"], candidate["x"], candidate["z"]))
 
-  def step_towards(self, state, unit, target_x, target_z, keep_distance=0):
+  def step_towards(self, state, unit, target_x, target_z, keep_distance=0, avoid_enemy_towers=False):
     if keep_distance:
-      return self.step_to_standoff(state, unit, target_x, target_z, keep_distance, keep_distance)
+      return self.step_to_standoff(
+        state,
+        unit,
+        target_x,
+        target_z,
+        keep_distance,
+        keep_distance,
+        avoid_enemy_towers=avoid_enemy_towers
+      )
 
-    return self.step_towards_any(state, unit, {(target_x, target_z)})
+    return self.step_towards_any(state, unit, {(target_x, target_z)}, avoid_enemy_towers=avoid_enemy_towers)
 
-  def step_to_standoff(self, state, unit, target_x, target_z, min_range, max_range):
+  def step_to_standoff(self, state, unit, target_x, target_z, min_range, max_range, avoid_enemy_towers=False):
     current_distance = hex_distance(unit["x"], unit["z"], target_x, target_z)
     if min_range <= current_distance <= max_range:
       return None
 
     goals = {
       (x, z)
-      for x, z in self.all_passable_cells(state)
+      for x, z in self.all_passable_cells(state, avoid_enemy_towers=avoid_enemy_towers)
       if min_range <= hex_distance(x, z, target_x, target_z) <= max_range
     }
-    return self.step_towards_any(state, unit, goals)
+    return self.step_towards_any(state, unit, goals, avoid_enemy_towers=avoid_enemy_towers)
 
-  def step_towards_any(self, state, unit, goals):
+  def step_towards_any(self, state, unit, goals, avoid_enemy_towers=False):
     if not goals:
       return None
 
@@ -913,7 +960,7 @@ class OffensiveBot:
 
     visited = {start}
     queue = deque()
-    for nx, nz in self.passable_neighbors(state, start[0], start[1]):
+    for nx, nz in self.passable_neighbors(state, start[0], start[1], avoid_enemy_towers=avoid_enemy_towers):
       first_step = (nx, nz)
       if first_step in goals:
         return first_step
@@ -922,7 +969,7 @@ class OffensiveBot:
 
     while queue:
       (x, z), first_step = queue.popleft()
-      for nx, nz in self.passable_neighbors(state, x, z):
+      for nx, nz in self.passable_neighbors(state, x, z, avoid_enemy_towers=avoid_enemy_towers):
         coord = (nx, nz)
         if coord in visited:
           continue
@@ -933,7 +980,7 @@ class OffensiveBot:
 
     return None
 
-  def path_distance(self, state, unit, target_x, target_z, max_steps=None):
+  def path_distance(self, state, unit, target_x, target_z, max_steps=None, avoid_enemy_towers=False):
     start = (unit["x"], unit["z"])
     target = (target_x, target_z)
     if start == target:
@@ -946,7 +993,7 @@ class OffensiveBot:
       if max_steps is not None and distance >= max_steps:
         continue
 
-      for nx, nz in self.passable_neighbors(state, x, z):
+      for nx, nz in self.passable_neighbors(state, x, z, avoid_enemy_towers=avoid_enemy_towers):
         coord = (nx, nz)
         if coord in visited:
           continue
@@ -966,40 +1013,54 @@ class OffensiveBot:
           cells.append(cell)
     return cells
 
-  def passable_neighbors(self, state, x, z):
+  def passable_neighbors(self, state, x, z, avoid_enemy_towers=False):
     return [
       (nx, nz) for nx, nz in neighbors(x, z, state.get("gridWidth", state["gridSize"]), state.get("gridHeight", state["gridSize"]))
       if self.is_passable_cell(state, nx, nz)
+      and (not avoid_enemy_towers or not self.is_enemy_power_tower_zone(state, nx, nz))
     ]
 
-  def adjacent_passable_cells(self, state, x, z):
+  def adjacent_passable_cells(self, state, x, z, avoid_enemy_towers=False):
     return {
       (nx, nz)
       for nx, nz in neighbors(x, z, state.get("gridWidth", state["gridSize"]), state.get("gridHeight", state["gridSize"]))
       if self.is_passable_cell(state, nx, nz)
+      and (not avoid_enemy_towers or not self.is_enemy_power_tower_zone(state, nx, nz))
     }
 
-  def all_passable_cells(self, state):
+  def all_passable_cells(self, state, avoid_enemy_towers=False):
     return [
       (x, z)
       for x in range(state.get("gridWidth", state["gridSize"]))
       for z in range(state.get("gridHeight", state["gridSize"]))
       if self.is_passable_cell(state, x, z)
+      and (not avoid_enemy_towers or not self.is_enemy_power_tower_zone(state, x, z))
     ]
 
   def is_passable_cell(self, state, x, z):
     return state["grid"][x][z]["type"] not in ("base", "obstacle", "resource")
 
-  def safest_passable_neighbor(self, state, unit, enemies):
-    candidates = self.passable_neighbors(state, unit["x"], unit["z"])
+  def safest_passable_neighbor(self, state, unit, enemies, avoid_enemy_towers=False):
+    candidates = self.passable_neighbors(state, unit["x"], unit["z"], avoid_enemy_towers=avoid_enemy_towers)
+    if not candidates and avoid_enemy_towers:
+      candidates = self.passable_neighbors(state, unit["x"], unit["z"])
     if not candidates:
       return None
-    return max(candidates, key=lambda coord: self.nearest_enemy_distance(coord[0], coord[1], enemies))
+    return max(candidates, key=lambda coord: (
+      0 if self.is_enemy_power_tower_zone(state, coord[0], coord[1]) else 1,
+      self.nearest_enemy_distance(coord[0], coord[1], enemies)
+    ))
 
   def nearest_enemy_distance(self, x, z, enemies):
     if not enemies:
       return 99
     return min(hex_distance(x, z, enemy["x"], enemy["z"]) for enemy in enemies)
+
+  def is_enemy_power_tower_zone(self, state, x, z):
+    return any(
+      hex_distance(x, z, tower["x"], tower["z"]) <= ENEMY_POWER_TOWER_AVOID_RADIUS
+      for tower in self.enemy_units(state, POWER_TOWER_TYPE, stationary=True)
+    )
 
   def enemy_base_target(self, current, state):
     for player_id, player in state.get("players", {}).items():

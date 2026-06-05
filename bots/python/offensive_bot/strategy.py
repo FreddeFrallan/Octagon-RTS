@@ -12,6 +12,7 @@ UNIT_COSTS = {
 }
 
 COMBAT_TYPES = {"mech", "artillery"}
+ARTILLERY_SHELL_FLIGHT_SECONDS = 1.0
 
 
 def post_json(url, payload):
@@ -270,15 +271,13 @@ class OffensiveBot:
 
     own = self.own_units(state)
     worker_count = sum(1 for unit in own if unit["type"] == "worker")
-    if worker_count < self.min_workers and crystals >= UNIT_COSTS["worker"]:
+    if worker_count < self.max_workers and crystals >= UNIT_COSTS["worker"]:
       return "worker"
 
     combat_choice = self.choose_combat_build(state, crystals)
     if combat_choice:
       return combat_choice
 
-    if worker_count < self.max_workers and crystals >= UNIT_COSTS["worker"]:
-      return "worker"
     return None
 
   def choose_combat_build(self, state, crystals):
@@ -317,12 +316,11 @@ class OffensiveBot:
     if not self.own_units(state, "mech"):
       return None
 
-    property_priority = {"moveSpeed": 0, "maxHp": 1}
     candidates = []
     for name, upgrade in tech_tree.items():
       if upgrade.get("targetUnit") != "mech":
         continue
-      if upgrade.get("targetProperty") not in property_priority:
+      if upgrade.get("targetProperty") != "maxHp":
         continue
 
       level = owned_levels.get(name, 0)
@@ -332,14 +330,13 @@ class OffensiveBot:
 
       candidates.append((
         level,
-        property_priority.get(upgrade.get("targetProperty"), 99),
         cost,
         name
       ))
 
     if not candidates:
       return None
-    return min(candidates)[3]
+    return min(candidates)[2]
 
   def own_units(self, state, unit_type=None, stationary=False):
     units = [
@@ -539,50 +536,80 @@ class OffensiveBot:
       path_steps = self.path_distance(state, mech, enemy["x"], enemy["z"], max_steps)
       if path_steps is None:
         continue
-      candidates.append((path_steps, unit_priority(enemy), enemy.get("hp", 999), enemy))
+      candidates.append((path_steps, unit_priority(enemy), enemy.get("hp", 999), enemy.get("id", ""), enemy))
 
     if not candidates:
       return None
-    return min(candidates)[3]
+    return min(candidates, key=lambda candidate: candidate[:4])[4]
 
   def artillery_target_in_way(self, state, artillery, goals):
     best_step = self.step_towards_any(state, artillery, goals)
     if not best_step:
       return None
 
-    candidates = [
-      enemy for enemy in self.enemy_units(state)
-      if 1 <= hex_distance(artillery["x"], artillery["z"], enemy["x"], enemy["z"]) <= 2
-    ]
+    candidates = []
+    for enemy in self.enemy_units(state):
+      target_square = self.artillery_target_square(state, artillery, enemy)
+      if not target_square:
+        continue
+      target_x, target_z = target_square
+      candidates.append((
+        hex_distance(target_x, target_z, best_step[0], best_step[1]),
+        unit_priority(enemy),
+        enemy.get("hp", 999),
+        enemy.get("id", ""),
+        enemy,
+        target_square
+      ))
+
     if not candidates:
       return None
 
-    target = min(
-      candidates,
-      key=lambda enemy: (
-        hex_distance(enemy["x"], enemy["z"], best_step[0], best_step[1]),
-        unit_priority(enemy),
-        enemy.get("hp", 999)
-      )
-    )
-    target_x, target_z = self.artillery_target_square(state, artillery, target)
+    _, _, _, _, target, target_square = min(candidates, key=lambda candidate: candidate[:4])
+    target_x, target_z = target_square
     return {**target, "x": target_x, "z": target_z}
 
   def artillery_target_square(self, state, artillery, target_unit):
     current = (target_unit["x"], target_unit["z"])
+    if not target_unit.get("isMoving"):
+      if self.is_valid_artillery_target(state, artillery, current[0], current[1]):
+        return current
+      return None
+
+    destination = self.artillery_target_destination(target_unit)
+    if not destination:
+      return None
+
+    impact_time_ms = int((time.time() + ARTILLERY_SHELL_FLIGHT_SECONDS) * 1000)
+    arrival_time_ms = self.target_arrival_time_ms(target_unit)
+    if arrival_time_ms is None or impact_time_ms < arrival_time_ms:
+      return None
+
+    if self.is_valid_artillery_target(state, artillery, destination[0], destination[1]):
+      return destination
+    return None
+
+  def target_arrival_time_ms(self, target_unit):
+    move_end_time = target_unit.get("moveEndTime")
+    if move_end_time is not None:
+      return move_end_time
+
+    move_start_time = target_unit.get("moveStartTime")
+    move_speed = target_unit.get("moveSpeed")
+    if move_start_time is None or not move_speed:
+      return None
+
+    return move_start_time + int(1500 / move_speed)
+
+  def artillery_target_destination(self, target_unit):
+    if target_unit.get("targetX") is not None and target_unit.get("targetZ") is not None:
+      return target_unit["targetX"], target_unit["targetZ"]
+
     tracker = self.unit_tracker.get(target_unit["id"], {})
-    stationary_since = tracker.get("stationary_since")
-
-    if stationary_since is not None and time.time() - stationary_since >= 2:
-      return current
-
     direction = self.target_direction(target_unit, tracker)
-    if direction:
-      predicted = (current[0] + direction[0], current[1] + direction[1])
-      if self.is_valid_artillery_target(state, artillery, predicted[0], predicted[1]):
-        return predicted
-
-    return current
+    if not direction:
+      return None
+    return target_unit["x"] + direction[0], target_unit["z"] + direction[1]
 
   def target_direction(self, target_unit, tracker):
     if target_unit.get("isMoving") and target_unit.get("targetX") is not None and target_unit.get("targetZ") is not None:

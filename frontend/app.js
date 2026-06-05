@@ -193,7 +193,6 @@ const opponentResourceCount = document.getElementById('opponent-resource-count')
 const opponentUnitCount = document.getElementById('opponent-unit-count');
 const opponentBaseHp = document.getElementById('opponent-base-hp');
 const hudRoomCode = document.getElementById('hud-room-code');
-const techTreeSummaryBtn = document.getElementById('tech-tree-summary-btn');
 const selectionName = document.getElementById('selection-name');
 const selectionCoord = document.getElementById('selection-coord');
 const selectionUnitStack = document.getElementById('selection-unit-stack');
@@ -267,13 +266,21 @@ function init() {
       mapSettingsModal.classList.add('hidden');
     }
   });
-  techTreeSummaryBtn.addEventListener('click', showTechTreeModal);
-  closeTechTreeBtn.addEventListener('click', () => techTreeModal.classList.add('hidden'));
-  techTreeModal.addEventListener('click', (ev) => {
-    if (ev.target === techTreeModal) {
-      techTreeModal.classList.add('hidden');
+  document.addEventListener('click', (ev) => {
+    if (ev.target.closest('#tech-tree-summary-btn')) {
+      showTechTreeModal();
     }
   });
+  if (closeTechTreeBtn && techTreeModal) {
+    closeTechTreeBtn.addEventListener('click', () => techTreeModal.classList.add('hidden'));
+    techTreeModal.addEventListener('click', (ev) => {
+      if (ev.target === techTreeModal) {
+        techTreeModal.classList.add('hidden');
+      }
+    });
+  } else {
+    console.warn("Tech tree modal elements were not found.");
+  }
 
   // Bind instructions modal
   closeInstructionsBtn.addEventListener('click', () => instructionsModal.classList.add('hidden'));

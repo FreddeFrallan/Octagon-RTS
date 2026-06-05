@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Octo-Command: Neon Grid (Real-Time)</title>
-  <link rel="stylesheet" href="index.css?v=multiplayer-1">
+  <link rel="stylesheet" href="index.css?v=tech-tree-button-1">
   
   <!-- Import map for Three.js modules -->
   <script type="importmap">
@@ -156,9 +156,11 @@
       </div>
       
       <div class="room-display">
-        <span>Room:</span>
-        <span id="hud-room-code" class="room-id-badge">----</span>
-        <button id="tech-tree-summary-btn" class="top-bar-button" type="button">Tech</button>
+        <div class="room-code-row">
+          <span>Room:</span>
+          <span id="hud-room-code" class="room-id-badge">----</span>
+        </div>
+        <button id="tech-tree-summary-btn" class="top-bar-button tech-tree-top-button" type="button">Tech Tree</button>
       </div>
       
       <div id="opponent-player-panel" class="top-player-panel p2">

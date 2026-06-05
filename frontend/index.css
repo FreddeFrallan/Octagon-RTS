@@ -71,7 +71,7 @@ body {
   transform: translateX(-50%);
   flex-direction: row;
   align-items: center;
-  gap: 24px;
+  gap: 18px;
   padding: 12px 18px;
   border-radius: 16px;
   width: min(980px, calc(100vw - 40px));
@@ -176,6 +176,7 @@ body {
     width: calc(100vw - 20px);
     gap: 10px;
     padding: 10px;
+    flex-wrap: wrap;
   }
 
   .turn-text {
@@ -200,10 +201,18 @@ body {
 .room-display {
   flex: 0 0 auto;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 7px;
   font-size: 0.95rem;
   color: var(--text-muted);
+}
+
+.room-code-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
 }
 
 .room-id-badge {
@@ -235,6 +244,14 @@ body {
   background: var(--neon-cyan);
   color: #fff;
   box-shadow: 0 0 10px rgba(0, 119, 170, 0.25);
+}
+
+.tech-tree-top-button {
+  width: 100%;
+  min-width: 112px;
+  border-color: rgba(0, 119, 170, 0.45);
+  background: rgba(0, 119, 170, 0.1);
+  box-shadow: 0 0 12px rgba(0, 119, 170, 0.12);
 }
 
 @media (max-width: 760px) {

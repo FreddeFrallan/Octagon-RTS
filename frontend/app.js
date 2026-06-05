@@ -1,8 +1,8 @@
 // app.js
 // Client Controller: coordinates lobby, real-time networking, logic, and 3D rendering (Bright Grass Theme)
 
-import { GameState, getHexDistance, playerLabel } from './game.js?v=multiplayer-1';
-import { GameRenderer } from './renderer.js?v=multiplayer-1';
+import { GameState, getHexDistance, playerLabel } from './game.js?v=power-tower-1';
+import { GameRenderer } from './renderer.js?v=power-tower-1';
 import * as THREE from 'three';
 
 let game = null;
@@ -13,7 +13,8 @@ let lastHovered = null;
 let unitsConfig = {
   worker: { cost: 50, maxHp: 10, attack: 1, minRange: 1, maxRange: 1 },
   mech: { cost: 100, maxHp: 30, attack: 8, minRange: 1, maxRange: 1 },
-  artillery: { cost: 80, maxHp: 5, attack: 16, minRange: 1, maxRange: 2 }
+  artillery: { cost: 80, maxHp: 5, attack: 16, minRange: 1, maxRange: 2 },
+  powerTower: { cost: 125, maxHp: 40, attack: 0, moveSpeed: 0, stationary: true }
 };
 window.UNITS_CONFIG = unitsConfig;
 let techTreeConfig = {};
@@ -22,6 +23,10 @@ function updateUILabels() {
   const attackSpan = btnAttack.querySelector('.cost');
   if (attackSpan && unitsConfig.artillery) {
     attackSpan.innerText = `Range ${unitsConfig.artillery.minRange}-${unitsConfig.artillery.maxRange}`;
+  }
+  const towerCostSpan = btnBuildTower?.querySelector('.cost');
+  if (towerCostSpan && unitsConfig.powerTower) {
+    towerCostSpan.innerText = `Worker build · 🪙 ${unitsConfig.powerTower.cost ?? 125}`;
   }
 }
 
@@ -201,6 +206,7 @@ const selectionUnitStack = document.getElementById('selection-unit-stack');
 const btnGather = document.getElementById('action-gather');
 const btnAttack = document.getElementById('action-attack');
 const btnStopFire = document.getElementById('action-stop');
+const btnBuildTower = document.getElementById('action-build-tower');
 const buildOptionsContainer = document.getElementById('build-options-container');
 
 // Modals
@@ -291,6 +297,7 @@ function init() {
   // Bind HUD contextual actions
   btnAttack.addEventListener('click', handleAttackAction);
   btnStopFire.addEventListener('click', handleStopFireAction);
+  btnBuildTower.addEventListener('click', handleBuildTowerAction);
 
   btnRestart.addEventListener('click', handleRestartLobby);
   hostPlayerCountMinus.addEventListener('click', () => setHostPlayerCount(hostPlayerCount - 1));
@@ -985,6 +992,13 @@ function handleBuildAction(unitType) {
   sendAction("build", { unitType });
 }
 
+function handleBuildTowerAction() {
+  if (botSessionActive) return;
+  const worker = getSelectedOwnedUnits().find(u => u.type === 'worker' && !u.isMoving);
+  if (!worker) return;
+  sendAction("buildTower", { workerId: worker.id });
+}
+
 function handleAttackAction() {
   if (botSessionActive) return;
   if (!game.selectedCell) return;
@@ -1017,6 +1031,18 @@ function getSelectedOwnedUnits() {
   if (!game.selectedCell) return [];
   const cell = game.getCell(game.selectedCell.x, game.selectedCell.z);
   return cell.units.filter(u => u.owner === playerId && game.selectedUnitIds.includes(u.id));
+}
+
+function isMovableUnit(unit) {
+  return !unit.stationary && unit.moveSpeed > 0;
+}
+
+function getSelectedMovableOwnedUnits() {
+  return getSelectedOwnedUnits().filter(isMovableUnit);
+}
+
+function hasPowerTower(cell) {
+  return cell.units.some(unit => unit.type === 'powerTower');
 }
 
 function canSelectedUnitsEnterCell(x, z) {
@@ -1065,9 +1091,16 @@ function onCanvasClick(e) {
 
       // Check if click is on adjacent cell (dist === 1)
       if (dist === 1 && canSelectedUnitsEnterCell(x, z)) {
+        const movableUnitIds = getSelectedMovableOwnedUnits().map(unit => unit.id);
+        if (movableUnitIds.length === 0) {
+          isMoveMode = false;
+          renderer.highlightMovementTiles(game.selectedCell.x, game.selectedCell.z, false, getSelectedOwnedUnits());
+          updateHUD();
+          return;
+        }
         // Send move request
         sendAction("move", {
-          unitIds: game.selectedUnitIds,
+          unitIds: movableUnitIds,
           toX: x,
           toZ: z
         });
@@ -1099,14 +1132,15 @@ function onCanvasClick(e) {
     }
     renderer.updateSelection(game.selectedCell);
 
-    // Auto-activate Move Mode if owned stationary units are present
+    // Auto-activate Move Mode only for selected units that can actually move.
     const cell = game.getCell(x, z);
     const ownedUnits = cell.units.filter(u => u.owner === playerId && game.selectedUnitIds.includes(u.id));
-    const isAnyMoving = ownedUnits.some(u => u.isMoving);
+    const movableUnits = ownedUnits.filter(isMovableUnit);
+    const isAnyMoving = movableUnits.some(u => u.isMoving);
 
-    if (manualActionsEnabled && ownedUnits.length > 0 && !isAnyMoving) {
+    if (manualActionsEnabled && movableUnits.length > 0 && !isAnyMoving) {
       isMoveMode = true;
-      renderer.highlightMovementTiles(x, z, true, ownedUnits);
+      renderer.highlightMovementTiles(x, z, true, movableUnits);
     } else {
       isMoveMode = false;
     }
@@ -1144,6 +1178,13 @@ function onCanvasRightClick(e) {
 
       // Check if click is on adjacent cell
       if (dist === 1 && canSelectedUnitsEnterCell(x, z)) {
+        const movableUnitIds = getSelectedMovableOwnedUnits().map(unit => unit.id);
+        if (movableUnitIds.length === 0) {
+          isMoveMode = false;
+          renderer.highlightMovementTiles(game.selectedCell.x, game.selectedCell.z, false, getSelectedOwnedUnits());
+          updateHUD();
+          return;
+        }
         if (isAttackMode) {
           isAttackMode = false;
           renderer.highlightAttackTiles(game.selectedCell.x, game.selectedCell.z, false);
@@ -1151,7 +1192,7 @@ function onCanvasRightClick(e) {
 
         // Send move request
         sendAction("move", {
-          unitIds: game.selectedUnitIds,
+          unitIds: movableUnitIds,
           toX: x,
           toZ: z
         });
@@ -1307,6 +1348,7 @@ function updateHUD() {
     btnGather.classList.add('hidden');
     btnAttack.classList.add('hidden');
     btnStopFire.classList.add('hidden');
+    btnBuildTower.classList.add('hidden');
     buildOptionsContainer.classList.add('hidden');
     
     if (isMoveMode) {
@@ -1351,8 +1393,8 @@ function updateHUD() {
         badge.style.color = owner.color;
         badge.style.borderColor = isSelected ? owner.color : 'rgba(0,0,0,0.08)';
         
-        const typeIcon = u.type === 'mech' ? '🤖' : (u.type === 'artillery' ? '🚀' : '👷');
-        const typeLabel = u.type === 'mech' ? 'Mech' : (u.type === 'artillery' ? 'Artillery' : 'Worker');
+        const typeIcon = u.type === 'mech' ? '🤖' : (u.type === 'artillery' ? '🚀' : (u.type === 'powerTower' ? '⚡' : '👷'));
+        const typeLabel = unitsConfig[u.type]?.name || (u.type === 'mech' ? 'Mech' : (u.type === 'artillery' ? 'Artillery' : 'Worker'));
         const movingTag = u.isMoving ? " [Moving]" : "";
         const gatherTag = u.isGathering ? " [Mining]" : "";
         const targetTag = (u.type === 'artillery' && u.attackTargetX !== null && u.attackTargetX !== undefined) ? ` [Firing -> [${u.attackTargetX}, ${u.attackTargetZ}]]` : "";
@@ -1383,6 +1425,7 @@ function updateHUD() {
 
     // Visibility 2: Automatic Move Mode checks
     const ownedSelectedUnits = cell.units.filter(u => u.owner === playerId && game.selectedUnitIds.includes(u.id));
+    const movableSelectedUnits = ownedSelectedUnits.filter(isMovableUnit);
     const hasArtillerySelected = ownedSelectedUnits.some(u => u.type === 'artillery' && !u.isMoving);
 
     if (isAttackMode && !hasArtillerySelected) {
@@ -1399,23 +1442,23 @@ function updateHUD() {
         isAttackMode = false;
         renderer.highlightAttackTiles(selectedCell.x, selectedCell.z, false);
       }
-    } else if (ownedSelectedUnits.length > 0) {
-      const isAnyMoving = ownedSelectedUnits.some(u => u.isMoving);
+    } else if (movableSelectedUnits.length > 0) {
+      const isAnyMoving = movableSelectedUnits.some(u => u.isMoving);
       if (isAnyMoving) {
         if (isMoveMode) {
           isMoveMode = false;
-          renderer.highlightMovementTiles(selectedCell.x, selectedCell.z, false, ownedSelectedUnits);
+          renderer.highlightMovementTiles(selectedCell.x, selectedCell.z, false, movableSelectedUnits);
         }
       } else {
         if (!isMoveMode && !isAttackMode) {
           isMoveMode = true;
-          renderer.highlightMovementTiles(selectedCell.x, selectedCell.z, true, ownedSelectedUnits);
+          renderer.highlightMovementTiles(selectedCell.x, selectedCell.z, true, movableSelectedUnits);
         }
       }
     } else {
       if (isMoveMode) {
         isMoveMode = false;
-        renderer.highlightMovementTiles(selectedCell.x, selectedCell.z, false, ownedSelectedUnits);
+        renderer.highlightMovementTiles(selectedCell.x, selectedCell.z, false, movableSelectedUnits);
       }
     }
 
@@ -1435,6 +1478,21 @@ function updateHUD() {
       btnStopFire.classList.remove('hidden');
     } else {
       btnStopFire.classList.add('hidden');
+    }
+
+    const towerConfig = unitsConfig.powerTower || { cost: 125 };
+    const canBuildTower = !botSessionActive
+      && cell.type === 'normal'
+      && !hasPowerTower(cell)
+      && ownedSelectedUnits.some(u => u.type === 'worker' && !u.isMoving)
+      && player
+      && player.baseHp > 0;
+    if (canBuildTower) {
+      btnBuildTower.classList.remove('hidden');
+      btnBuildTower.disabled = player.crystals < (towerConfig.cost ?? 125);
+    } else {
+      btnBuildTower.classList.add('hidden');
+      btnBuildTower.disabled = false;
     }
   }
 }

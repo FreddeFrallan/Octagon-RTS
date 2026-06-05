@@ -47,5 +47,22 @@
       "shellFlightTime": 1000,
       "traceFadeTime": 1000
     }
+  },
+  "powerTower": {
+    "name": "PowerTower",
+    "cost": 125,
+    "maxHp": 40,
+    "attack": 100,
+    "attackCooldown": 1000,
+    "minRange": 0,
+    "maxRange": 1,
+    "moveSpeed": 0,
+    "stationary": true,
+    "builtBy": "worker",
+    "description": "Stationary worker-built tower. Only one PowerTower can occupy a tile, but mobile units may still pass through.",
+    "animation": {
+      "size": 0.85,
+      "color": "electric"
+    }
   }
 }

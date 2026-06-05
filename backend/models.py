@@ -5,10 +5,18 @@ from hex_grid import get_hex_distance
 from map_generator import initalize_map
 
 
+def default_player_tech_upgrades():
+  return {
+    upgrade_name: 1
+    for upgrade_name, upgrade in TECH_TREE_CONFIG.items()
+    if upgrade.get("type") == "PassiveIncome"
+  }
+
+
 class Unit:
   def __init__(self, uid, utype, owner, x, z):
     self.id = uid
-    self.type = utype  # 'worker', 'mech', or 'artillery'
+    self.type = utype
     self.owner = owner # 1 or 2
 
     config = UNITS_CONFIG.get(utype, {})
@@ -17,6 +25,7 @@ class Unit:
     self.attack = config.get("attack", 1)
     self.attackCooldown = config.get("attackCooldown", 1000)
     self.moveSpeed = config.get("moveSpeed", 1.0)
+    self.stationary = config.get("stationary", False)
 
     self.x = x
     self.z = z
@@ -47,6 +56,7 @@ class Unit:
       "attack": self.attack,
       "attackCooldown": self.attackCooldown,
       "moveSpeed": self.moveSpeed,
+      "stationary": self.stationary,
       "x": self.x,
       "z": self.z,
       "isMoving": self.isMoving,
@@ -119,7 +129,7 @@ class Room:
         "maxBaseHp": player_config.get("maxBaseHp", player_config.get("baseHp", 100)),
         "basePos": player_config.get("basePos", {"x": 0, "z": 0}),
         "ticks": 0,
-        "techUpgrades": {}
+        "techUpgrades": default_player_tech_upgrades()
       }
     self.winner = None
     self.grid_width = map_data.get("gridWidth", map_data.get("gridSize", 8))

@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { getHexNeighbors, getHexDistance } from './game.js';
-import { createBaseObject, createResourceObject, createUnitObject } from './objects/index.js';
+import { createBaseObject, createResourceObject, createUnitObject } from './objects/index.js?v=power-tower-1';
 
 export class GameRenderer {
   constructor(canvasId, game) {

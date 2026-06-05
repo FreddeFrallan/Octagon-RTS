@@ -24,6 +24,8 @@ def handle_action(data):
       success, error_msg = move_units(room, player_id, args)
     elif action_type == "build":
       success, error_msg = build_unit(room, player_id, args)
+    elif action_type == "buildTower":
+      success, error_msg = build_power_tower(room, player_id, args)
     elif action_type == "upgrade":
       success, error_msg = buy_upgrade(room, player_id, args)
     elif action_type == "attack":
@@ -52,6 +54,8 @@ def move_units(room, player_id, args):
       return False, "You don't own this unit"
     if unit.isMoving:
       return False, "Unit is already traveling"
+    if unit.stationary or unit.moveSpeed <= 0:
+      return False, f"{unit.type} cannot move"
 
     neighbors = get_neighbors(unit.x, unit.z, room.grid_width, room.grid_height)
     if (tx, tz) not in neighbors:
@@ -83,7 +87,13 @@ def move_units(room, player_id, args):
 
 def build_unit(room, player_id, args):
   utype = args.get("unitType")
-  cost = UNITS_CONFIG.get(utype, {}).get("cost", 50)
+  unit_config = UNITS_CONFIG.get(utype)
+  if not unit_config:
+    return False, "Unknown unit type"
+  if unit_config.get("builtBy") == "worker":
+    return False, f"{unit_config.get('name', utype)} must be built by workers"
+
+  cost = unit_config.get("cost", 50)
   player = room.players[player_id]
 
   if player["crystals"] < cost:
@@ -105,6 +115,48 @@ def build_unit(room, player_id, args):
   sx, sz = random.choice(spawn_spots)
   room.spawn_unit(utype, player_id, sx, sz)
   room.log(f"{player['name']} spawned {utype} at [{sx}, {sz}].", "build")
+  return True, ""
+
+
+def build_power_tower(room, player_id, args):
+  tower_type = "powerTower"
+  tower_config = UNITS_CONFIG.get(tower_type)
+  if not tower_config:
+    return False, "PowerTower is not configured"
+
+  worker_id = args.get("workerId")
+  if not worker_id:
+    unit_ids = args.get("unitIds", [])
+    worker_id = unit_ids[0] if unit_ids else None
+  if not worker_id or worker_id not in room.units:
+    return False, "Worker does not exist"
+
+  worker = room.units[worker_id]
+  if worker.owner != player_id:
+    return False, "You don't own this worker"
+  if worker.type != "worker":
+    return False, "PowerTower must be built by a worker"
+  if worker.isMoving:
+    return False, "Worker is already traveling"
+
+  player = room.players[player_id]
+  if player["baseHp"] <= 0:
+    return False, "Base is destroyed"
+
+  cost = tower_config.get("cost", 50)
+  if player["crystals"] < cost:
+    return False, "Insufficient Gold"
+
+  cell_type = room.grid[worker.x][worker.z].type
+  if cell_type in ("base", "obstacle", "resource"):
+    return False, "Cannot build PowerTower on blocked terrain"
+
+  if any(unit.type == tower_type and unit.x == worker.x and unit.z == worker.z for unit in room.units.values()):
+    return False, "A PowerTower already exists on this tile"
+
+  player["crystals"] -= cost
+  room.spawn_unit(tower_type, player_id, worker.x, worker.z)
+  room.log(f"{player['name']} built PowerTower at [{worker.x}, {worker.z}].", "build")
   return True, ""
 
 

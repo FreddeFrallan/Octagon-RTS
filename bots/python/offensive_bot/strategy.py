@@ -8,10 +8,14 @@ from collections import deque
 UNIT_COSTS = {
   "worker": 50,
   "mech": 100,
-  "artillery": 80
+  "artillery": 80,
+  "powerTower": 125
 }
 
 COMBAT_TYPES = {"mech", "artillery"}
+POWER_TOWER_TYPE = "powerTower"
+DEFENSIVE_POWER_TOWER_COUNT = 1
+DEFENSIVE_POWER_TOWER_RADIUS = 3
 ARTILLERY_SHELL_FLIGHT_SECONDS = 1.0
 
 
@@ -66,12 +70,27 @@ def unit_priority(unit):
 
 
 class OffensiveBot:
-  def __init__(self, name="Python Offensive Bot", max_actions_per_tick=8, verbose=True, min_workers=1, max_workers=5):
+  def __init__(
+    self,
+    name="Python Offensive Bot",
+    max_actions_per_tick=8,
+    verbose=True,
+    min_workers=1,
+    max_workers=5,
+    max_power_towers=4,
+    base_power_towers=2,
+    defensive_power_towers=DEFENSIVE_POWER_TOWER_COUNT,
+    defensive_power_tower_radius=DEFENSIVE_POWER_TOWER_RADIUS
+  ):
     self.name = name
     self.max_actions_per_tick = max_actions_per_tick
     self.verbose = verbose
     self.min_workers = max(0, min_workers)
     self.max_workers = max(self.min_workers, max_workers)
+    self.max_power_towers = max(0, max_power_towers)
+    self.base_power_towers = max(0, min(base_power_towers, self.max_power_towers))
+    self.defensive_power_towers = max(0, min(defensive_power_towers, self.max_power_towers))
+    self.defensive_power_tower_radius = max(1, defensive_power_tower_radius)
     self.session = None
     self.session_lock = threading.Lock()
     self.thread = None
@@ -245,6 +264,17 @@ class OffensiveBot:
         return True
       return False
 
+    if order["action"] == "buildTower":
+      worker_id = order["args"]["workerId"]
+      key = ("buildTower",)
+      last_key, last_time = self.last_unit_orders.get(worker_id, (None, 0))
+      if last_key == key and time.time() - last_time < 1.5:
+        return False
+      if self.action(current, "buildTower", order["args"]):
+        self.last_unit_orders[worker_id] = (key, time.time())
+        return True
+      return False
+
     return self.action(current, order["action"], order["args"])
 
   def try_build(self, current, state):
@@ -271,6 +301,12 @@ class OffensiveBot:
 
     own = self.own_units(state)
     worker_count = sum(1 for unit in own if unit["type"] == "worker")
+    if worker_count < self.min_workers and crystals >= UNIT_COSTS["worker"]:
+      return "worker"
+
+    if self.should_reserve_for_power_tower(state, crystals):
+      return None
+
     if worker_count < self.max_workers and crystals >= UNIT_COSTS["worker"]:
       return "worker"
 
@@ -279,6 +315,19 @@ class OffensiveBot:
       return combat_choice
 
     return None
+
+  def should_reserve_for_power_tower(self, state, crystals):
+    if len(self.own_units(state, POWER_TOWER_TYPE)) >= self.max_power_towers:
+      return False
+    if not self.own_units(state, "worker"):
+      return False
+
+    if self.needs_defensive_power_tower(state):
+      return bool(self.defensive_power_tower_goals(state))
+
+    if crystals < UNIT_COSTS[POWER_TOWER_TYPE]:
+      return False
+    return bool(self.own_units(state, "worker", stationary=True))
 
   def choose_combat_build(self, state, crystals):
     own = self.own_units(state)
@@ -303,6 +352,8 @@ class OffensiveBot:
     player = state["players"][str(current["playerId"])]
     crystals = player["crystals"]
     if player["baseHp"] <= 0:
+      return False
+    if self.should_reserve_for_power_tower(state, crystals):
       return False
 
     upgrade_name = self.choose_upgrade(state, crystals, player.get("techUpgrades", {}))
@@ -365,8 +416,20 @@ class OffensiveBot:
     enemies = self.enemy_units(state)
     resources = self.resource_cells(state)
     orders = []
+    assigned_workers = set()
+    planned_tower_tiles = set()
+
+    player = state["players"][str(current["playerId"])]
+    if player.get("crystals", 0) >= UNIT_COSTS[POWER_TOWER_TYPE]:
+      for order in self.plan_power_tower_orders(current, state, workers, enemies, planned_tower_tiles):
+        worker_id = self.order_unit_id(order)
+        if worker_id:
+          assigned_workers.add(worker_id)
+        orders.append(order)
 
     for worker in workers:
+      if worker["id"] in assigned_workers:
+        continue
       current_enemy_distance = self.nearest_enemy_distance(worker["x"], worker["z"], enemies)
       if current_enemy_distance > 2 and any(hex_distance(worker["x"], worker["z"], resource["x"], resource["z"]) == 1 for resource in resources):
         continue
@@ -378,6 +441,141 @@ class OffensiveBot:
           break
 
     return orders
+
+  def plan_power_tower_orders(self, current, state, workers, enemies, planned_tower_tiles):
+    existing_towers = self.own_units(state, POWER_TOWER_TYPE)
+    if len(existing_towers) >= self.max_power_towers:
+      return []
+
+    goals = self.power_tower_goals(current, state)
+    if not goals:
+      return []
+
+    orders = []
+    assigned_workers = set()
+    if self.needs_defensive_power_tower(state):
+      player = state["players"][str(current["playerId"])]
+      base_pos = player["basePos"]
+      defensive_count = len(self.defensive_power_towers_near_base(state, (base_pos["x"], base_pos["z"])))
+      needed = min(
+        self.defensive_power_towers - defensive_count,
+        self.max_power_towers - len(existing_towers)
+      )
+    else:
+      target_count = self.base_power_towers if len(existing_towers) < self.base_power_towers else self.max_power_towers
+      needed = target_count - len(existing_towers)
+
+    if needed <= 0:
+      return []
+
+    for goal in goals:
+      if len(orders) >= needed:
+        break
+      if goal in planned_tower_tiles:
+        continue
+      if not self.is_valid_power_tower_tile(state, goal[0], goal[1]):
+        continue
+
+      worker = self.closest_available_worker(workers, goal, assigned_workers, enemies)
+      if not worker:
+        continue
+
+      if (worker["x"], worker["z"]) == goal:
+        orders.append(self.build_tower_order(worker["id"]))
+        planned_tower_tiles.add(goal)
+        assigned_workers.add(worker["id"])
+        continue
+
+      step = self.step_towards_any(state, worker, {goal})
+      if step:
+        orders.append(self.move_order(worker["id"], step[0], step[1]))
+        planned_tower_tiles.add(goal)
+        assigned_workers.add(worker["id"])
+
+    return orders
+
+  def power_tower_goals(self, current, state):
+    player = state["players"][str(current["playerId"])]
+    base_pos = player["basePos"]
+    base = (base_pos["x"], base_pos["z"])
+    if self.needs_defensive_power_tower(state):
+      return self.defensive_power_tower_goals(state)
+
+    existing_tower_count = len(self.own_units(state, POWER_TOWER_TYPE))
+    if existing_tower_count < self.base_power_towers:
+      return self.base_power_tower_goals(state, base)
+    return self.center_power_tower_goals(state, base)
+
+  def needs_defensive_power_tower(self, state):
+    if self.defensive_power_towers <= 0:
+      return False
+
+    player = state["players"][str(state["localPlayerId"])]
+    base_pos = player["basePos"]
+    base = (base_pos["x"], base_pos["z"])
+    return len(self.defensive_power_towers_near_base(state, base)) < self.defensive_power_towers
+
+  def defensive_power_towers_near_base(self, state, base):
+    return [
+      tower for tower in self.own_units(state, POWER_TOWER_TYPE)
+      if hex_distance(tower["x"], tower["z"], base[0], base[1]) <= self.defensive_power_tower_radius
+    ]
+
+  def defensive_power_tower_goals(self, state):
+    player = state["players"][str(state["localPlayerId"])]
+    base_pos = player["basePos"]
+    base = (base_pos["x"], base_pos["z"])
+    return [
+      coord for coord in self.base_power_tower_goals(state, base)
+      if hex_distance(coord[0], coord[1], base[0], base[1]) <= self.defensive_power_tower_radius
+    ]
+
+  def base_power_tower_goals(self, state, base):
+    return sorted(
+      self.all_passable_cells(state),
+      key=lambda coord: (
+        abs(hex_distance(coord[0], coord[1], base[0], base[1]) - 2),
+        hex_distance(coord[0], coord[1], base[0], base[1]),
+        coord[1],
+        coord[0]
+      )
+    )
+
+  def center_power_tower_goals(self, state, base):
+    width = state.get("gridWidth", state["gridSize"])
+    height = state.get("gridHeight", state["gridSize"])
+    center_x = (width - 1) / 2
+    center_z = (height - 1) / 2
+    return sorted(
+      self.all_passable_cells(state),
+      key=lambda coord: (
+        abs(coord[0] - center_x) + abs(coord[1] - center_z),
+        hex_distance(coord[0], coord[1], base[0], base[1]),
+        coord[1],
+        coord[0]
+      )
+    )
+
+  def closest_available_worker(self, workers, goal, assigned_workers, enemies):
+    candidates = [
+      worker for worker in workers
+      if worker["id"] not in assigned_workers
+      and self.nearest_enemy_distance(worker["x"], worker["z"], enemies) > 2
+    ]
+    if not candidates:
+      return None
+    return min(candidates, key=lambda worker: (
+      hex_distance(worker["x"], worker["z"], goal[0], goal[1]),
+      worker["id"]
+    ))
+
+  def is_valid_power_tower_tile(self, state, x, z):
+    if not self.is_passable_cell(state, x, z):
+      return False
+    return not any(
+      unit["type"] == POWER_TOWER_TYPE and unit["x"] == x and unit["z"] == z
+      for unit in state.get("units", {}).values()
+    )
 
   def choose_resource_targets(self, worker, state, resources, enemies):
     if not resources:
@@ -823,11 +1021,24 @@ class OffensiveBot:
       "args": {"unitIds": unit_ids, "toX": x, "toZ": z}
     }
 
+  def build_tower_order(self, worker_id):
+    return {
+      "action": "buildTower",
+      "args": {"workerId": worker_id}
+    }
+
   def attack_order(self, unit_id, x, z):
     return {
       "action": "attack",
       "args": {"unitIds": [unit_id], "toX": x, "toZ": z}
     }
+
+  def order_unit_id(self, order):
+    args = order.get("args", {})
+    if order.get("action") == "buildTower":
+      return args.get("workerId")
+    unit_ids = args.get("unitIds", [])
+    return unit_ids[0] if unit_ids else None
 
   def log(self, message):
     if self.verbose:

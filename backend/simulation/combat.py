@@ -12,6 +12,8 @@ def resolve_close_combat(room, now_ms):
   for attacker in attackers:
     if attacker.id not in room.units:
       continue
+    if attacker.attack <= 0:
+      continue
     if not is_attack_ready(attacker, now_ms):
       continue
 

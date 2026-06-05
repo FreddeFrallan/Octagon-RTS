@@ -45,7 +45,7 @@ export function playerLabel(playerId) {
 export class Unit {
   constructor(id, type, owner, x, z) {
     this.id = id;
-    this.type = type; // 'worker', 'mech', or 'artillery'
+    this.type = type;
     this.owner = owner; // 1 or 2
     const config = (window.UNITS_CONFIG && window.UNITS_CONFIG[type]) || {};
     const defaultMaxHp = type === 'mech' ? 30 : (type === 'artillery' ? 5 : 10);
@@ -57,6 +57,7 @@ export class Unit {
     this.attack = config.attack ?? defaultAttack;
     this.attackCooldown = config.attackCooldown ?? defaultAttackCooldown;
     this.moveSpeed = config.moveSpeed ?? defaultMoveSpeed;
+    this.stationary = config.stationary ?? false;
 
     this.x = x;
     this.z = z;
@@ -182,6 +183,7 @@ export class GameState {
       unit.attack = su.attack;
       unit.attackCooldown = su.attackCooldown;
       unit.moveSpeed = su.moveSpeed;
+      unit.stationary = su.stationary ?? false;
       unit.isMoving = su.isMoving;
       unit.moveStartX = su.moveStartX;
       unit.moveStartZ = su.moveStartZ;

@@ -43,13 +43,13 @@ def stop_process(process):
 
 def main():
   parser = argparse.ArgumentParser(
-    description="Start Octagon-RTS locally with four strategic bots."
+    description="Start Octagon-RTS locally with four offensive bots."
   )
   parser.add_argument("app_port", type=port, help="Port for the main application server.")
-  parser.add_argument("bot_one_port", type=port, help="Port for the first strategy bot.")
-  parser.add_argument("bot_two_port", type=port, help="Port for the second strategy bot.")
-  parser.add_argument("bot_three_port", type=port, help="Port for the third strategy bot.")
-  parser.add_argument("bot_four_port", type=port, help="Port for the fourth strategy bot.")
+  parser.add_argument("bot_one_port", type=port, help="Port for the first offensive bot.")
+  parser.add_argument("bot_two_port", type=port, help="Port for the second offensive bot.")
+  parser.add_argument("bot_three_port", type=port, help="Port for the third offensive bot.")
+  parser.add_argument("bot_four_port", type=port, help="Port for the fourth offensive bot.")
   args = parser.parse_args()
 
   bot_ports = [
@@ -64,13 +64,13 @@ def main():
 
   bot_command = [
     sys.executable,
-    str(ROOT / "bots" / "python" / "strategic_bot" / "run_bot.py"),
+    str(ROOT / "bots" / "python" / "offensive_bot" / "run_bot.py"),
     "--host",
     "127.0.0.1",
   ]
   bots = [
     start_process(
-      bot_command + ["--port", str(bot_port), "--name", f"Python Strategic Bot {index}"]
+      bot_command + ["--port", str(bot_port), "--name", f"Python Offensive Bot {index}"]
     )
     for index, bot_port in enumerate(bot_ports, start=1)
   ]
@@ -91,13 +91,13 @@ def main():
 
   try:
     for index, bot_port in enumerate(bot_ports, start=1):
-      print(f"Started strategy bot {index} at http://localhost:{bot_port}")
+      print(f"Started offensive bot {index} at http://localhost:{bot_port}")
 
     time.sleep(0.3)
     for index, bot in enumerate(bots, start=1):
       exit_code = bot.poll()
       if exit_code is not None:
-        print(f"Strategy bot {index} exited early with code {exit_code}", file=sys.stderr)
+        print(f"Offensive bot {index} exited early with code {exit_code}", file=sys.stderr)
         return exit_code
 
     print(f"Starting Octagon-RTS at http://localhost:{args.app_port}")

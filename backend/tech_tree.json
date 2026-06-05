@@ -1,0 +1,71 @@
+{
+  "upgrade_passive_income": {
+    "type": "PassiveIncome",
+    "valueIncrease": 1,
+    "initialCost": 100,
+    "costIncrease": 100
+  },
+  "upgrade_worker_max_hp": {
+    "targetUnit": "worker",
+    "targetProperty": "maxHp",
+    "valueIncrease": 5,
+    "initialCost": 50,
+    "costIncrease": 25
+  },
+  "upgrade_worker_attack": {
+    "targetUnit": "worker",
+    "targetProperty": "attack",
+    "valueIncrease": 1,
+    "initialCost": 50,
+    "costIncrease": 25
+  },
+  "upgrade_worker_move_speed": {
+    "targetUnit": "worker",
+    "targetProperty": "moveSpeed",
+    "valueIncrease": 0.1,
+    "initialCost": 50,
+    "costIncrease": 25
+  },
+  "upgrade_mech_max_hp": {
+    "targetUnit": "mech",
+    "targetProperty": "maxHp",
+    "valueIncrease": 10,
+    "initialCost": 75,
+    "costIncrease": 50
+  },
+  "upgrade_mech_attack": {
+    "targetUnit": "mech",
+    "targetProperty": "attack",
+    "valueIncrease": 2,
+    "initialCost": 100,
+    "costIncrease": 75
+  },
+  "upgrade_mech_move_speed": {
+    "targetUnit": "mech",
+    "targetProperty": "moveSpeed",
+    "valueIncrease": 0.1,
+    "initialCost": 75,
+    "costIncrease": 50
+  },
+  "upgrade_artillery_max_hp": {
+    "targetUnit": "artillery",
+    "targetProperty": "maxHp",
+    "valueIncrease": 5,
+    "initialCost": 75,
+    "costIncrease": 50
+  },
+  "upgrade_artillery_attack": {
+    "targetUnit": "artillery",
+    "targetProperty": "attack",
+    "valueIncrease": 3,
+    "initialCost": 100,
+    "costIncrease": 75
+  },
+  "upgrade_artillery_move_speed": {
+    "targetUnit": "artillery",
+    "targetProperty": "moveSpeed",
+    "valueIncrease": 0.1,
+    "initialCost": 75,
+    "costIncrease": 50
+  }
+}

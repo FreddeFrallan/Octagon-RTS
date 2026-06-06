@@ -252,7 +252,8 @@ function init() {
       const delta = Number(stepButton.dataset.delta);
       const setting = currentMapSettings?.[key];
       if (!setting) return;
-      const nextTarget = Math.max(setting.min, Math.min(setting.max, Number(setting.target) + delta));
+      const step = Number(setting.step || 1);
+      const nextTarget = Math.max(setting.min, Math.min(setting.max, Number(setting.target) + delta * step));
       updateMapSetting(key, nextTarget);
     }
   });
@@ -618,6 +619,7 @@ function formatMapSettingLabel(key) {
     width: 'Width',
     height: 'Height',
     numResources: 'Resources',
+    ResourceAmount: 'Resource Amount',
     numObsticale: 'Obstacles',
     randomPlayer: 'Random Players',
     fogOfWar: 'Fog Of War'

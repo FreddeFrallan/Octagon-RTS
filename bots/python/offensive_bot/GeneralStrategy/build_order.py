@@ -1,4 +1,10 @@
-from GamePlans import EarlyGamePlan, LateGamePlan, MidGamePlan
+from GamePlans import (
+  EarlyGamePlan,
+  FinishStagePlan,
+  LateGamePlan,
+  MidGamePlan,
+  NoResourcesPlan
+)
 from GeneralStrategy.settings import (
   BUILD_PHASE_ORDER,
   BuildPhase,
@@ -10,14 +16,22 @@ def create_game_plans():
   plans = [
     EarlyGamePlan(),
     MidGamePlan(),
-    LateGamePlan()
+    LateGamePlan(),
+    NoResourcesPlan(),
+    FinishStagePlan()
   ]
   return {plan.phase: plan for plan in plans}
 
 
 def select_game_plan(bot, state):
   candidate = next_build_strategy_phase(bot, state)
-  if BUILD_PHASE_ORDER[candidate] > BUILD_PHASE_ORDER[bot.current_build_phase]:
+  terminal_phases = (BuildPhase.NO_RESOURCES, BuildPhase.FINISH_STAGE)
+  if candidate in terminal_phases or bot.current_build_phase in terminal_phases:
+    if candidate != bot.current_build_phase:
+      bot.current_build_phase = candidate
+      bot.current_game_plan = bot.game_plans[candidate]
+      bot.log(f"build phase advanced to {candidate.value}")
+  elif BUILD_PHASE_ORDER[candidate] > BUILD_PHASE_ORDER[bot.current_build_phase]:
     bot.current_build_phase = candidate
     bot.current_game_plan = bot.game_plans[candidate]
     bot.log(f"build phase advanced to {candidate.value}")
@@ -37,6 +51,11 @@ def build_strategy_phase(bot, state):
 
 
 def next_build_strategy_phase(bot, state):
+  if not bot.enemy_units(state):
+    return BuildPhase.FINISH_STAGE
+  if not bot.resource_cells(state):
+    return BuildPhase.NO_RESOURCES
+
   own = bot.own_units(state)
   unit_counts = {}
   for unit in own:

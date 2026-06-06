@@ -69,6 +69,7 @@ def load_random_map_settings():
         "width": {"target": 8, "min": 6, "max": 12},
         "height": {"target": 8, "min": 6, "max": 12},
         "numResources": {"target": 8, "min": 0, "max": 20},
+        "ResourceAmount": {"target": 200, "min": 25, "max": 1000, "step": 25},
         "numObsticale": {"target": 6, "min": 0, "max": 20},
         "randomPlayer": {"target": False, "options": [False, True]},
         "fogOfWar": {"target": False, "options": [False, True]}
@@ -116,6 +117,8 @@ def validate_random_map_settings(settings):
         if target > max_value:
             target = max_value
         normalized[key] = {"target": target, "min": min_value, "max": max_value}
+        if "step" in default_value or "step" in value:
+            normalized[key]["step"] = value.get("step", default_value.get("step", 1))
 
     return normalized
 
@@ -155,6 +158,7 @@ def generate_random_map(player_count=2):
     height = int(height)
 
     num_resources = int(setting_target(settings, "numResources", 8))
+    resource_amount = int(setting_target(settings, "ResourceAmount", 200))
     num_obstacles = int(setting_target(settings, "numObsticale", setting_target(settings, "numObstacles", 0)))
     player_count = max(2, min(int(player_count), 4))
     player_configs = generate_player_configs(width, height, bool(setting_target(settings, "randomPlayer", False)),
@@ -162,7 +166,7 @@ def generate_random_map(player_count=2):
     obstacles = generate_obstacles(width, height, player_configs, num_obstacles)
 
     # Uses the updated point-reflective symmetrical resource allocation
-    resources = generate_balanced_resources(width, height, player_configs, num_resources, obstacles)
+    resources = generate_balanced_resources(width, height, player_configs, num_resources, obstacles, resource_amount)
     fog_of_war = bool(setting_target(settings, "fogOfWar", False))
 
     return {
@@ -303,7 +307,7 @@ def bases_are_connected(width, height, player_configs, obstacles):
     return False
 
 
-def generate_balanced_resources(width, height, player_configs, num_resources, obstacles=None):
+def generate_balanced_resources(width, height, player_configs, num_resources, obstacles=None, resource_amount=200):
     """
   Generates resources using point-reflective mirroring around the center of the grid.
   This distributes resources evenly across the map while ensuring perfect fairness.
@@ -378,7 +382,10 @@ def generate_balanced_resources(width, height, player_configs, num_resources, ob
     if len(selected) < num_resources:
         raise ValueError(f"Could only place {len(selected)} of {num_resources} requested resources")
 
-    return [{"x": cell["x"], "z": cell["z"], "gold": 200} for cell in selected[:num_resources]]
+    return [
+        {"x": cell["x"], "z": cell["z"], "gold": resource_amount, "maxGold": resource_amount}
+        for cell in selected[:num_resources]
+    ]
 
 
 def resource_candidates(width, height, player_configs, obstacles):

@@ -105,6 +105,7 @@ class OffensiveBot(
     self.stop_event = threading.Event()
     self.worker_spend = 0
     self.combat_spend = 0
+    self.upgrade_spend = 0
     self.unit_tracker = {}
     self.last_unit_orders = {}
     self.last_artillery_targets = {}
@@ -126,6 +127,7 @@ class OffensiveBot(
       }
       self.worker_spend = 0
       self.combat_spend = 0
+      self.upgrade_spend = 0
       self.unit_tracker = {}
       self.last_unit_orders = {}
       self.last_artillery_targets = {}
@@ -199,6 +201,7 @@ class OffensiveBot(
     self._offline_player_id = player_id
     self.worker_spend = 0
     self.combat_spend = 0
+    self.upgrade_spend = 0
     self.unit_tracker = {}
     self.last_unit_orders = {}
     self.last_artillery_targets = {}
@@ -240,7 +243,16 @@ class OffensiveBot(
 
     actions_sent = 0
     game_plan = self.select_game_plan(state)
-    if self.try_build(current, state, game_plan):
+    if game_plan.phase in (BuildPhase.NO_RESOURCES, BuildPhase.FINISH_STAGE):
+      self.send_base_assault_orders(current, state)
+      return
+
+    if self.should_prioritize_upgrade(game_plan):
+      if self.try_upgrade(current, state, game_plan):
+        actions_sent += 1
+      elif self.try_build(current, state, game_plan):
+        actions_sent += 1
+    elif self.try_build(current, state, game_plan):
       actions_sent += 1
     elif self.try_upgrade(current, state, game_plan):
       actions_sent += 1
@@ -249,6 +261,14 @@ class OffensiveBot(
     combat_orders = self.plan_combat_orders(current, state)
 
     for order in self.interleave_orders(economy_orders, combat_orders):
+      if actions_sent >= self.max_actions_per_tick:
+        break
+      if self.send_order(current, order):
+        actions_sent += 1
+
+  def send_base_assault_orders(self, current, state):
+    actions_sent = 0
+    for order in self.plan_base_assault_orders(current, state):
       if actions_sent >= self.max_actions_per_tick:
         break
       if self.send_order(current, order):
@@ -287,7 +307,32 @@ class OffensiveBot(
     if not upgrade_name:
       return False
 
-    return self.action(current, "upgrade", {"upgradeName": upgrade_name})
+    if self.action(current, "upgrade", {"upgradeName": upgrade_name}):
+      self.upgrade_spend += self.upgrade_cost(state, player.get("techUpgrades", {}), upgrade_name)
+      return True
+    return False
+
+  def upgrade_cost(self, state, owned_levels, upgrade_name):
+    upgrade = state.get("techTree", {}).get(upgrade_name, {})
+    level = owned_levels.get(upgrade_name, 0)
+    return upgrade.get("initialCost", 0) + level * upgrade.get("costIncrease", 0)
+
+  def should_prioritize_upgrade(self, game_plan):
+    allocation = self.strategy_instance.phase_value(game_plan.phase, "upgradeAllocation", 0)
+    try:
+      allocation = float(allocation)
+    except (TypeError, ValueError):
+      allocation = 0
+    allocation = max(0.0, min(1.0, allocation))
+    if allocation <= 0:
+      return False
+    if allocation >= 1:
+      return True
+
+    total_spend = self.combat_spend + self.upgrade_spend
+    if total_spend <= 0:
+      return True
+    return self.upgrade_spend / total_spend < allocation
 
   def select_game_plan(self, state):
     return build_order.select_game_plan(self, state)

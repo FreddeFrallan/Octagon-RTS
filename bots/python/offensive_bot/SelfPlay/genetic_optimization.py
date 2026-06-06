@@ -48,6 +48,12 @@ def parse_args():
     parser.add_argument("--num-rounds", type=int, default=10, help="Number of generations to run. Default: 10")
     parser.add_argument("--max-ticks", type=int, default=10000, help="Maximum ticks per game. Default: 10000")
     parser.add_argument("--mutation-rate", type=float, default=0.12, help="Per-gene mutation chance. Default: 0.12")
+    parser.add_argument("--initial-mutation-rate", type=float, default=0.35,
+                        help="Per-gene mutation chance for the initial population. Default: 0.35")
+    parser.add_argument("--tribes", type=int, default=3,
+                        help="Number of persistent breeding tribes. Default: 3")
+    parser.add_argument("--elite-percentage", type=float, default=0.25,
+                        help="Top fraction retained as breeding parents within each tribe. Default: 0.25")
     parser.add_argument("--seed", type=int, default=None, help="Random seed for reproducible parent selection.")
     parser.add_argument("--runs-dir", default=str(DEFAULT_RUNS_DIR),
                         help=f"Parent folder for timestamped run outputs. Default: {DEFAULT_RUNS_DIR}")
@@ -63,11 +69,33 @@ def load_default_genome():
         return StrategyGenome.from_strategy_instance(json.load(file))
 
 
-def make_initial_population(default_genome, population_size, mutation_rate, rng):
-    population = [default_genome]
-    while len(population) < population_size:
-        population.append(create_offspring(default_genome, default_genome, mutation_rate=mutation_rate, rng=rng))
+def make_initial_population(default_genome, population_size, tribe_count, initial_mutation_rate, rng):
+    tribe_sizes = target_tribe_sizes(population_size, tribe_count)
+    population = [{"genome": default_genome, "tribe": 0, "staticDefault": True}]
+
+    for tribe, tribe_size in enumerate(tribe_sizes):
+        existing = 1 if tribe == 0 else 0
+        for _ in range(existing, tribe_size):
+            population.append({
+                "genome": create_offspring(
+                    default_genome,
+                    default_genome,
+                    mutation_rate=initial_mutation_rate,
+                    rng=rng
+                ),
+                "tribe": tribe,
+                "staticDefault": False
+            })
     return population
+
+
+def target_tribe_sizes(population_size, tribe_count):
+    base_size = population_size // tribe_count
+    remainder = population_size % tribe_count
+    return [
+        base_size + (1 if tribe < remainder else 0)
+        for tribe in range(tribe_count)
+    ]
 
 
 def evaluate_game(player_one_index, player_one_strategy, player_two_index, player_two_strategy, max_ticks, timeout, max_retries):
@@ -149,7 +177,7 @@ def score_result(winner, candidate_player_id, ticks, max_ticks):
 
 
 def evaluate_population(population, num_games_per_round, max_ticks, num_procs, rng, round_index, timeout, max_retries):
-    strategies = [genome.to_strategy_instance() for genome in population]
+    strategies = [entry["genome"].to_strategy_instance() for entry in population]
     total_games = len(population) * num_games_per_round
     tasks = [
         random_pairing_task(strategies, max_ticks, rng, timeout, max_retries)
@@ -158,9 +186,10 @@ def evaluate_population(population, num_games_per_round, max_ticks, num_procs, r
 
     results = [
         {
-            "genome": genome,
+            "genome": entry["genome"],
             "index": genome_index,
-            "staticDefault": genome_index == 0,
+            "tribe": entry["tribe"],
+            "staticDefault": entry["staticDefault"],
             "score": 0,
             "wins": 0,
             "losses": 0,
@@ -168,7 +197,7 @@ def evaluate_population(population, num_games_per_round, max_ticks, num_procs, r
             "ticks": 0,
             "games": 0
         }
-        for genome_index, genome in enumerate(population)
+        for genome_index, entry in enumerate(population)
     ]
 
     with ProcessPoolExecutor(max_workers=num_procs) as executor:
@@ -231,28 +260,58 @@ def aggregate_player_result(result, score, winner, player_id, ticks):
         result["losses"] += 1
 
 
-def next_generation(default_genome, evaluated, population_size, mutation_rate, rng):
-    elite_count = max(2, population_size // 4)
-    mutable_elites = [
-        item["genome"]
-        for item in evaluated
-        if not item["staticDefault"]
-    ][:elite_count]
-    if len(mutable_elites) < 2:
-        mutable_elites = [item["genome"] for item in evaluated[:elite_count]]
+def next_generation(default_genome, evaluated, population_size, tribe_count, elite_percentage, mutation_rate, rng):
+    tribe_sizes = target_tribe_sizes(population_size, tribe_count)
+    next_population = []
 
-    next_population = [default_genome]
-    for elite in mutable_elites:
-        if len(next_population) >= population_size:
-            break
-        next_population.append(elite)
+    for tribe, tribe_size in enumerate(tribe_sizes):
+        tribe_results = [
+            item for item in evaluated
+            if item["tribe"] == tribe
+        ]
+        tribe_results.sort(key=lambda item: item["averageScore"], reverse=True)
+        elite_count = max(1, int(round(tribe_size * elite_percentage)))
+        elite_count = min(tribe_size, elite_count)
 
-    while len(next_population) < population_size:
-        parent_a = rng.choice(mutable_elites)
-        parent_b = rng.choice(mutable_elites)
-        next_population.append(create_offspring(parent_a, parent_b, mutation_rate=mutation_rate, rng=rng))
+        selected_elites = tribe_results[:elite_count]
+        parent_pool = [
+            item["genome"]
+            for item in selected_elites
+            if not item["staticDefault"]
+        ]
+        if not parent_pool:
+            parent_pool = [
+                item["genome"]
+                for item in tribe_results
+                if not item["staticDefault"]
+            ]
+        if not parent_pool:
+            parent_pool = [item["genome"] for item in selected_elites]
+
+        if tribe == 0:
+            next_population.append({"genome": default_genome, "tribe": tribe, "staticDefault": True})
+
+        for item in selected_elites:
+            if tribe_population_size(next_population, tribe) >= tribe_size:
+                break
+            if item["staticDefault"]:
+                continue
+            next_population.append({"genome": item["genome"], "tribe": tribe, "staticDefault": False})
+
+        while tribe_population_size(next_population, tribe) < tribe_size:
+            parent_a = rng.choice(parent_pool)
+            parent_b = rng.choice(parent_pool)
+            next_population.append({
+                "genome": create_offspring(parent_a, parent_b, mutation_rate=mutation_rate, rng=rng),
+                "tribe": tribe,
+                "staticDefault": False
+            })
 
     return next_population
+
+
+def tribe_population_size(population, tribe):
+    return sum(1 for entry in population if entry["tribe"] == tribe)
 
 
 def print_round(round_index, evaluated):
@@ -260,6 +319,7 @@ def print_round(round_index, evaluated):
     default = next(item for item in evaluated if item["staticDefault"])
     print(
         f"round={round_index} "
+        f"best_tribe={best['tribe']} "
         f"best_avg_score={best['averageScore']:.2f} "
         f"wins={best['wins']} losses={best['losses']} draws={best['draws']} "
         f"avg_ticks={best['averageTicks']:.1f} "
@@ -299,13 +359,35 @@ def main():
         raise ValueError("--num-games-per-round must be at least 1")
     if args.num_procs < 1:
         raise ValueError("--num-procs must be at least 1")
+    if args.tribes < 1:
+        raise ValueError("--tribes must be at least 1")
+    if args.tribes > args.population_size:
+        raise ValueError("--tribes must be less than or equal to --population-size")
+    if not 0 <= args.mutation_rate <= 1:
+        raise ValueError("--mutation-rate must be between 0 and 1")
+    if not 0 <= args.initial_mutation_rate <= 1:
+        raise ValueError("--initial-mutation-rate must be between 0 and 1")
+    if not 0 < args.elite_percentage <= 1:
+        raise ValueError("--elite-percentage must be greater than 0 and at most 1")
 
     rng = random.Random(args.seed)
     default_genome = load_default_genome()
-    population = make_initial_population(default_genome, args.population_size, args.mutation_rate, rng)
+    population = make_initial_population(
+        default_genome,
+        args.population_size,
+        args.tribes,
+        args.initial_mutation_rate,
+        rng
+    )
     best = None
     run_dir = create_run_dir(args.runs_dir)
-    print(f"run_dir={run_dir}\n", flush=True)
+    print(
+        f"run_dir={run_dir} "
+        f"tribes={args.tribes} "
+        f"initial_mutation_rate={args.initial_mutation_rate} "
+        f"mutation_rate={args.mutation_rate}\n",
+        flush=True
+    )
 
     for round_index in range(1, args.num_rounds + 1):
         evaluated = evaluate_population(population, args.num_games_per_round, args.max_ticks, args.num_procs, rng,
@@ -316,7 +398,15 @@ def main():
         print(f"saved_round_best={written_path}\n", flush=True)
         if best is None or round_best_mutable["averageScore"] > best["averageScore"]:
             best = round_best_mutable
-        population = next_generation(default_genome, evaluated, args.population_size, args.mutation_rate, rng)
+        population = next_generation(
+            default_genome,
+            evaluated,
+            args.population_size,
+            args.tribes,
+            args.elite_percentage,
+            args.mutation_rate,
+            rng
+        )
 
     print(
         f"best score={best['averageScore']:.2f} "

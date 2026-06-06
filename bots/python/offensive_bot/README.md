@@ -5,6 +5,7 @@ This bot is a copied and tuned variant of the strategic bot. It keeps the same H
 - Early-game: builds a worker economy first, then creates the configured hunter force.
 - Mid-game: stops worker production, reserves enough gold for configured base-close towers, upgrades passive income to the configured level, then spends surplus gold on attack units.
 - Late-game: ignores worker count, stops tower spending, and focuses on combat unit production, upgrades, and attacking.
+- No-resources: stops spending and sends all stationary movable units directly into a base assault.
 - Build phases only advance. Once the bot reaches mid-game or late-game, unit losses do not move it back to an earlier build plan.
 - Build phases are selected by `GeneralStrategy/build_order.py`; each phase delegates build and upgrade decisions to a `GamePlan` instance configured by a strategy JSON file.
 - Non-worker units use tactical states: `WAITING`, `MOVING`, and `COMBAT`, with state-specific behavior maps for mechs, artillery, and power towers.
@@ -45,7 +46,8 @@ Strategy layout:
 
 Main settings:
 
-- `StrategyInstances/default.json`: bot name, action cap, worker/tower caps, squad sizes, micro behavior, `completionCriteria` for phase transitions, phase build orders, combat build thresholds, and late-game upgrade rules.
+- `StrategyInstances/default.json`: bot name, action cap, worker/tower caps, squad sizes, micro behavior, `completionCriteria` for phase transitions, phase build orders, combat build thresholds, phase `upgradeAllocation`, and flat weighted late-game upgrade rules with optional `counterWeight` and `maxLevel`.
+- `SelfPlay/genome.py`: genetic optimization genes for unit/order quantities, micro settings, per-phase `upgradeAllocation`, and every tech upgrade's `counterWeight` plus `maxLevel` capped at 30.
 - `GeneralStrategy/settings.py`: unit costs, enum identities, tactical constants, micro behavior defaults, and fallback values when a strategy JSON omits a field.
 - `squads.mech.minimumUnits`: minimum mech count for a `shuttleSquad`.
 - `squads.sneakyArtillery.artilleryCount` and `mechEscortCount`: flanking squad composition.
@@ -99,3 +101,11 @@ PYTHONPATH=bots/python/offensive_bot python3 -m backend.offline_simulation --pla
 ```
 
 The offline runner instantiates the bot class directly and calls `force_tick(player_state)`. In that mode the offensive bot returns the action JSON it would normally POST to `/api/action`, without using HTTP.
+
+Self-play optimization:
+
+```bash
+python3 bots/python/offensive_bot/SelfPlay/genetic_optimization.py --tribes 3 --initial-mutation-rate 0.35
+```
+
+Tribes are persistent breeding groups. Matchups remain random across the full population, but each generation selects elite parents within each tribe and only breeds offspring inside that same tribe.

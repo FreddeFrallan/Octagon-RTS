@@ -60,6 +60,8 @@ class BuildPhase(Enum):
   EARLY_GAME = "early_game"
   MID_GAME = "mid_game"
   LATE_GAME = "late_game"
+  NO_RESOURCES = "NoResources"
+  FINISH_STAGE = "FinishStage"
 
 
 class UnitTacticalState(Enum):
@@ -139,7 +141,9 @@ class SquadGoal(Enum):
 BUILD_PHASE_ORDER = {
   BuildPhase.EARLY_GAME: 0,
   BuildPhase.MID_GAME: 1,
-  BuildPhase.LATE_GAME: 2
+  BuildPhase.LATE_GAME: 2,
+  BuildPhase.NO_RESOURCES: 3,
+  BuildPhase.FINISH_STAGE: 4
 }
 
 DEFAULT_WORKER_STRATEGY = WorkerStrategy.GATHER_AND_BUILD_BASE_TOWER

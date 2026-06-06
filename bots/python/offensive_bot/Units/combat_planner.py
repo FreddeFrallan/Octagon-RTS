@@ -70,6 +70,31 @@ class CombatPlannerMixin:
 
     return orders
 
+  def plan_base_assault_orders(self, current, state):
+    base_target = self.enemy_base_target(current, state)
+    if not base_target:
+      return []
+
+    goals = self.adjacent_passable_cells(state, base_target["x"], base_target["z"])
+    orders = []
+    for unit in self.own_units(state, stationary=True):
+      if unit["type"] == "artillery" and self.is_valid_artillery_target(state, unit, base_target["x"], base_target["z"]):
+        orders.append(self.attack_order(unit["id"], base_target["x"], base_target["z"]))
+        continue
+
+      if not goals:
+        continue
+      if (unit["x"], unit["z"]) in goals:
+        continue
+      if unit.get("stationary") or unit.get("moveSpeed", 1) <= 0:
+        continue
+
+      step = self.step_towards_any(state, unit, goals)
+      if step:
+        orders.append(self.move_order(unit["id"], step[0], step[1]))
+
+    return orders
+
   def build_squads(self, state, phase):
     return mech_micro.build_squads(self, state, phase)
 

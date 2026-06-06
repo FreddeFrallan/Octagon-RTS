@@ -4,6 +4,32 @@ from dataclasses import dataclass
 
 EARLY_BUILD_UNITS = ("worker", "mech", "artillery")
 EARLY_COMPLETION_UNITS = ("worker", "mech", "artillery")
+PHASE_KEYS = ("early_game", "mid_game", "late_game")
+TECH_UPGRADE_NAMES = (
+  "upgrade_passive_income",
+  "upgrade_worker_max_hp",
+  "upgrade_worker_attack",
+  "upgrade_worker_move_speed",
+  "upgrade_mech_max_hp",
+  "upgrade_mech_attack",
+  "upgrade_mech_move_speed",
+  "upgrade_artillery_max_hp",
+  "upgrade_artillery_attack",
+  "upgrade_artillery_move_speed"
+)
+TECH_UPGRADE_TARGETS = {
+  "upgrade_worker_max_hp": ("worker", "maxHp"),
+  "upgrade_worker_attack": ("worker", "attack"),
+  "upgrade_worker_move_speed": ("worker", "moveSpeed"),
+  "upgrade_mech_max_hp": ("mech", "maxHp"),
+  "upgrade_mech_attack": ("mech", "attack"),
+  "upgrade_mech_move_speed": ("mech", "moveSpeed"),
+  "upgrade_artillery_max_hp": ("artillery", "maxHp"),
+  "upgrade_artillery_attack": ("artillery", "attack"),
+  "upgrade_artillery_move_speed": ("artillery", "moveSpeed")
+}
+DEFAULT_UPGRADE_COUNTER_WEIGHT = 1.0
+DEFAULT_UPGRADE_MAX_LEVEL = 30
 
 UNIT_LIMIT_KEYS = (
   "minWorkers",
@@ -65,9 +91,6 @@ GENE_TYPE_CATEGORY = "category"
 GENE_TYPE_TEXT = "text"
 
 COMBAT_UNIT_OPTIONS = ("mech", "artillery")
-UPGRADE_UNIT_OPTIONS = ("worker", "mech", "artillery")
-UPGRADE_PROPERTY_OPTIONS = ("maxHp", "attack", "moveSpeed")
-UPGRADE_SELECTION_OPTIONS = ("lowest_level_then_cost",)
 
 
 @dataclass(frozen=True)
@@ -120,6 +143,33 @@ def category_gene(key, options, description, repair=None):
 
 def metadata(*items):
   return OrderedDict((item.key, item) for item in items)
+
+
+def phase_upgrade_genes():
+  genes = []
+  for phase in PHASE_KEYS:
+    genes.append(float_gene(
+      f"phases.{phase}.upgradeAllocation",
+      0.0,
+      1.0,
+      f"Share of {phase} combat/upgrade spend targeted for upgrades.",
+      step=0.05
+    ))
+    for upgrade_name in TECH_UPGRADE_NAMES:
+      genes.append(float_gene(
+        f"phases.{phase}.upgrades.{upgrade_name}.counterWeight",
+        0.0,
+        1.0,
+        f"Inverse frequency weight for {upgrade_name} in {phase}. Lower means more frequent.",
+        step=0.05
+      ))
+      genes.append(int_gene(
+        f"phases.{phase}.upgrades.{upgrade_name}.maxLevel",
+        0,
+        30,
+        f"Maximum {upgrade_name} level in {phase}.",
+      ))
+  return genes
 
 
 GENE_METADATA = metadata(
@@ -186,9 +236,7 @@ GENE_METADATA = metadata(
   category_gene("phases.mid_game.reserveCombatUnit", COMBAT_UNIT_OPTIONS, "Combat unit cost reserved while planning towers."),
 
   int_gene("phases.late_game.buildOrder.combat", 0, 1, "Whether late game combat production is enabled."),
-  category_gene("phases.late_game.upgrades.0.targetUnit", UPGRADE_UNIT_OPTIONS, "Unit type affected by the first late-game upgrade rule."),
-  category_gene("phases.late_game.upgrades.0.targetProperty", UPGRADE_PROPERTY_OPTIONS, "Property affected by the first late-game upgrade rule."),
-  category_gene("phases.late_game.upgrades.0.selection", UPGRADE_SELECTION_OPTIONS, "Selection policy for the first late-game upgrade rule.")
+  *phase_upgrade_genes()
 )
 
 GENE_REPAIR_RULES = (
@@ -237,6 +285,7 @@ class StrategyGenome:
     }
     for unit_type in EARLY_BUILD_UNITS:
       genes[f"phases.early_game.buildOrder.{unit_type}.targetCount"] = early_targets.get(unit_type, 0)
+    add_phase_upgrade_genes(genes, early_game, "early_game")
 
     mid_game = strategy.get("phases", {}).get("mid_game", {})
     mid_completion = mid_game.get("completionCriteria", {})
@@ -246,18 +295,14 @@ class StrategyGenome:
     genes["phases.mid_game.passiveIncomeLevel"] = mid_game.get("passiveIncomeLevel", 0)
     genes["phases.mid_game.reserveForPowerTower"] = mid_game.get("reserveForPowerTower", False)
     genes["phases.mid_game.reserveCombatUnit"] = mid_game.get("reserveCombatUnit", 0)
+    add_phase_upgrade_genes(genes, mid_game, "mid_game")
 
     late_game = strategy.get("phases", {}).get("late_game", {})
     genes["phases.late_game.buildOrder.combat"] = 1 if any(
       step.get("type") == "combat"
       for step in late_game.get("buildOrder", [])
     ) else 0
-
-    upgrades = late_game.get("upgrades", [])
-    first_upgrade = upgrades[0] if upgrades else {}
-    genes["phases.late_game.upgrades.0.targetUnit"] = first_upgrade.get("targetUnit", 0)
-    genes["phases.late_game.upgrades.0.targetProperty"] = first_upgrade.get("targetProperty", 0)
-    genes["phases.late_game.upgrades.0.selection"] = first_upgrade.get("selection", 0)
+    add_phase_upgrade_genes(genes, late_game, "late_game")
 
     return cls(genes)
 
@@ -303,7 +348,9 @@ class StrategyGenome:
               "targetCount": self.genes[f"phases.early_game.buildOrder.{unit_type}.targetCount"]
             }
             for unit_type in EARLY_BUILD_UNITS
-          ]
+          ],
+          "upgradeAllocation": self.genes["phases.early_game.upgradeAllocation"],
+          "upgrades": self.phase_upgrades("early_game")
         },
         "mid_game": {
           "completionCriteria": {
@@ -313,11 +360,14 @@ class StrategyGenome:
           "basePowerTowers": self.genes["phases.mid_game.basePowerTowers"],
           "passiveIncomeLevel": self.genes["phases.mid_game.passiveIncomeLevel"],
           "reserveForPowerTower": self.genes["phases.mid_game.reserveForPowerTower"],
-          "reserveCombatUnit": self.genes["phases.mid_game.reserveCombatUnit"]
+          "reserveCombatUnit": self.genes["phases.mid_game.reserveCombatUnit"],
+          "upgradeAllocation": self.genes["phases.mid_game.upgradeAllocation"],
+          "upgrades": self.phase_upgrades("mid_game")
         },
         "late_game": {
+          "upgradeAllocation": self.genes["phases.late_game.upgradeAllocation"],
           "buildOrder": self.late_game_build_order(),
-          "upgrades": self.late_game_upgrades()
+          "upgrades": self.phase_upgrades("late_game")
         }
       }
     }
@@ -327,14 +377,48 @@ class StrategyGenome:
       return []
     return [{"type": "combat"}]
 
-  def late_game_upgrades(self):
-    target_unit = self.genes["phases.late_game.upgrades.0.targetUnit"]
-    target_property = self.genes["phases.late_game.upgrades.0.targetProperty"]
-    selection = self.genes["phases.late_game.upgrades.0.selection"]
-    if not target_unit or not target_property or not selection:
-      return []
-    return [{
-      "targetUnit": target_unit,
-      "targetProperty": target_property,
-      "selection": selection
-    }]
+  def phase_upgrades(self, phase):
+    return {
+      upgrade_name: {
+        "counterWeight": self.genes[f"phases.{phase}.upgrades.{upgrade_name}.counterWeight"],
+        "maxLevel": self.genes[f"phases.{phase}.upgrades.{upgrade_name}.maxLevel"]
+      }
+      for upgrade_name in TECH_UPGRADE_NAMES
+    }
+
+
+def add_phase_upgrade_genes(genes, phase_config, phase):
+  genes[f"phases.{phase}.upgradeAllocation"] = phase_config.get("upgradeAllocation", 0.0)
+  upgrade_rules = phase_upgrade_rules_by_name(phase_config.get("upgrades", {}))
+  for upgrade_name in TECH_UPGRADE_NAMES:
+    rule = upgrade_rules.get(upgrade_name, {})
+    genes[f"phases.{phase}.upgrades.{upgrade_name}.counterWeight"] = rule.get(
+      "counterWeight",
+      rule.get("lossWeight", DEFAULT_UPGRADE_COUNTER_WEIGHT)
+    )
+    genes[f"phases.{phase}.upgrades.{upgrade_name}.maxLevel"] = rule.get("maxLevel", DEFAULT_UPGRADE_MAX_LEVEL)
+
+
+def phase_upgrade_rules_by_name(upgrade_rules):
+  if isinstance(upgrade_rules, dict):
+    return {
+      name: rule if isinstance(rule, dict) else {}
+      for name, rule in upgrade_rules.items()
+    }
+
+  normalized = {}
+  for rule in upgrade_rules or []:
+    if not isinstance(rule, dict):
+      continue
+    upgrade_name = rule.get("upgradeName")
+    if upgrade_name:
+      normalized[upgrade_name] = rule
+      continue
+
+    target = (rule.get("targetUnit"), rule.get("targetProperty"))
+    for candidate_name, candidate_target in TECH_UPGRADE_TARGETS.items():
+      if target == candidate_target:
+        normalized[candidate_name] = rule
+        break
+
+  return normalized

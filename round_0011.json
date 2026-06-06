@@ -2,57 +2,57 @@
   "name": "Python Offensive Bot",
   "maxActionsPerTick": 8,
   "unitLimits": {
-    "minWorkers": 1,
-    "maxWorkers": 5,
-    "maxPowerTowers": 4,
-    "basePowerTowers": 2,
+    "minWorkers": 2,
+    "maxWorkers": 6,
+    "maxPowerTowers": 3,
+    "basePowerTowers": 1,
     "defensivePowerTowers": 1,
-    "defensivePowerTowerRadius": 3
+    "defensivePowerTowerRadius": 4
   },
   "combatBuildOrder": {
     "openingArtilleryMinMechs": 1,
-    "minArtillery": 1,
-    "minMechsBeforeDefault": 2,
-    "defaultUnit": "mech"
+    "minArtillery": 0,
+    "minMechsBeforeDefault": 0,
+    "defaultUnit": "artillery"
   },
   "squads": {
     "mech": {
       "minimumUnits": 2
     },
     "sneakyArtillery": {
-      "artilleryCount": 1,
-      "mechEscortCount": 1
+      "artilleryCount": 2,
+      "mechEscortCount": 2
     }
   },
   "micro": {
     "mech": {
       "nearbyEnemyMaxSteps": 3,
       "baseStandoffDistance": 1,
-      "blockerAdjacentDistance": 1,
+      "blockerAdjacentDistance": 0,
       "avoidEnemyTowers": true
     },
     "artillery": {
-      "minRange": 1,
+      "minRange": 0,
       "maxRange": 2,
-      "escortDistance": 1,
+      "escortDistance": 0,
       "shellFlightSeconds": 1.0,
-      "combatContextMechDistance": 3,
+      "combatContextMechDistance": 2,
       "retreatThreatDistance": 2,
-      "avoidEnemyTowers": true,
-      "enemyPowerTowerPriority": -1
+      "avoidEnemyTowers": false,
+      "enemyPowerTowerPriority": -3
     },
     "worker": {
-      "safeResourceEnemyDistance": 2,
+      "safeResourceEnemyDistance": 1,
       "resourceEnemyDangerRadius": 4,
-      "resourceEnemyDangerWeight": 2,
+      "resourceEnemyDangerWeight": 3,
       "resourceTowerDanger": 8,
       "resourceAdjacentDistance": 1,
       "avoidEnemyTowers": true
     },
     "powerTower": {
-      "combatContextRange": 1,
-      "workerSafeDistance": 2,
-      "basePreferredDistance": 2
+      "combatContextRange": 0,
+      "workerSafeDistance": 0,
+      "basePreferredDistance": 0
     },
     "orders": {
       "moveRepeatSeconds": 0.8,
@@ -64,26 +64,26 @@
     "early_game": {
       "completionCriteria": {
         "unitCounts": {
-          "worker": 4,
-          "mech": 2,
+          "worker": 5,
+          "mech": 1,
           "artillery": 0
         }
       },
       "buildOrder": [
         {
           "unitType": "worker",
-          "targetCount": 4
+          "targetCount": 5
         },
         {
           "unitType": "mech",
-          "targetCount": 2
+          "targetCount": 3
         },
         {
           "unitType": "artillery",
           "targetCount": 0
         }
       ],
-      "upgradeAllocation": 0.0,
+      "upgradeAllocation": 0.1,
       "upgrades": {
         "upgrade_passive_income": {
           "counterWeight": 1.0,
@@ -91,48 +91,48 @@
         },
         "upgrade_worker_max_hp": {
           "counterWeight": 1.0,
-          "maxLevel": 0
+          "maxLevel": 29
         },
         "upgrade_worker_attack": {
-          "counterWeight": 1.0,
-          "maxLevel": 0
+          "counterWeight": 0.95,
+          "maxLevel": 30
         },
         "upgrade_worker_move_speed": {
-          "counterWeight": 1.0,
-          "maxLevel": 0
+          "counterWeight": 0.95,
+          "maxLevel": 30
         },
         "upgrade_mech_max_hp": {
-          "counterWeight": 1.0,
+          "counterWeight": 0.95,
           "maxLevel": 30
         },
         "upgrade_mech_attack": {
-          "counterWeight": 1.0,
-          "maxLevel": 30
+          "counterWeight": 0.9,
+          "maxLevel": 29
         },
         "upgrade_mech_move_speed": {
-          "counterWeight": 1.0,
+          "counterWeight": 0.9,
           "maxLevel": 30
         },
         "upgrade_artillery_max_hp": {
           "counterWeight": 1.0,
-          "maxLevel": 0
+          "maxLevel": 28
         },
         "upgrade_artillery_attack": {
           "counterWeight": 1.0,
-          "maxLevel": 0
+          "maxLevel": 28
         },
         "upgrade_artillery_move_speed": {
-          "counterWeight": 1.0,
-          "maxLevel": 0
+          "counterWeight": 0.85,
+          "maxLevel": 30
         }
       }
     },
     "mid_game": {
       "completionCriteria": {
-        "basePowerTowers": 1,
+        "basePowerTowers": 2,
         "passiveIncomeLevel": 1
       },
-      "basePowerTowers": 1,
+      "basePowerTowers": 2,
       "passiveIncomeLevel": 1,
       "reserveForPowerTower": true,
       "reserveCombatUnit": "mech",
@@ -143,16 +143,16 @@
           "maxLevel": 30
         },
         "upgrade_worker_max_hp": {
-          "counterWeight": 1.0,
-          "maxLevel": 0
+          "counterWeight": 0.95,
+          "maxLevel": 29
         },
         "upgrade_worker_attack": {
           "counterWeight": 1.0,
-          "maxLevel": 0
+          "maxLevel": 30
         },
         "upgrade_worker_move_speed": {
           "counterWeight": 1.0,
-          "maxLevel": 0
+          "maxLevel": 29
         },
         "upgrade_mech_max_hp": {
           "counterWeight": 1.0,
@@ -160,28 +160,28 @@
         },
         "upgrade_mech_attack": {
           "counterWeight": 1.0,
-          "maxLevel": 30
+          "maxLevel": 29
         },
         "upgrade_mech_move_speed": {
-          "counterWeight": 1.0,
+          "counterWeight": 0.95,
           "maxLevel": 30
         },
         "upgrade_artillery_max_hp": {
-          "counterWeight": 1.0,
-          "maxLevel": 0
+          "counterWeight": 0.95,
+          "maxLevel": 30
         },
         "upgrade_artillery_attack": {
           "counterWeight": 1.0,
-          "maxLevel": 0
+          "maxLevel": 29
         },
         "upgrade_artillery_move_speed": {
           "counterWeight": 1.0,
-          "maxLevel": 0
+          "maxLevel": 30
         }
       }
     },
     "late_game": {
-      "upgradeAllocation": 0.5,
+      "upgradeAllocation": 0.45,
       "buildOrder": [
         {
           "type": "combat"
@@ -189,44 +189,44 @@
       ],
       "upgrades": {
         "upgrade_passive_income": {
-          "maxLevel": 4,
-          "counterWeight": 0.025
-        },
-        "upgrade_mech_max_hp": {
-          "maxLevel": 10,
-          "counterWeight": 0.05
-        },
-        "upgrade_mech_attack": {
-          "maxLevel": 10,
-          "counterWeight": 0.05
+          "counterWeight": 0.0,
+          "maxLevel": 3
         },
         "upgrade_worker_max_hp": {
           "counterWeight": 1.0,
-          "maxLevel": 0
+          "maxLevel": 30
         },
         "upgrade_worker_attack": {
-          "counterWeight": 1.0,
-          "maxLevel": 0
+          "counterWeight": 0.95,
+          "maxLevel": 30
         },
         "upgrade_worker_move_speed": {
-          "counterWeight": 1.0,
-          "maxLevel": 0
+          "counterWeight": 0.9,
+          "maxLevel": 30
+        },
+        "upgrade_mech_max_hp": {
+          "counterWeight": 0.05,
+          "maxLevel": 11
+        },
+        "upgrade_mech_attack": {
+          "counterWeight": 0.05,
+          "maxLevel": 11
         },
         "upgrade_mech_move_speed": {
-          "counterWeight": 1.0,
+          "counterWeight": 0.95,
           "maxLevel": 30
         },
         "upgrade_artillery_max_hp": {
           "counterWeight": 1.0,
-          "maxLevel": 0
+          "maxLevel": 30
         },
         "upgrade_artillery_attack": {
           "counterWeight": 1.0,
-          "maxLevel": 0
+          "maxLevel": 30
         },
         "upgrade_artillery_move_speed": {
-          "counterWeight": 1.0,
-          "maxLevel": 0
+          "counterWeight": 0.95,
+          "maxLevel": 30
         }
       }
     }

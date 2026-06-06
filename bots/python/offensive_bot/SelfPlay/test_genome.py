@@ -9,7 +9,7 @@ BOT_ROOT = Path(__file__).resolve().parents[1]
 if str(BOT_ROOT) not in sys.path:
   sys.path.insert(0, str(BOT_ROOT))
 
-from SelfPlay.genome import GENE_METADATA, GENE_REPAIR_RULES, StrategyGenome
+from SelfPlay.genome import GENE_METADATA, GENE_REPAIR_RULES, PHASE_KEYS, TECH_UPGRADE_NAMES, StrategyGenome
 
 
 class StrategyGenomeTest(unittest.TestCase):
@@ -46,6 +46,22 @@ class StrategyGenomeTest(unittest.TestCase):
     ]
 
     self.assertEqual([], invalid)
+
+  def test_upgrade_genes_cover_all_phases_and_tech_upgrades(self):
+    genome = StrategyGenome.from_strategy_instance(self.load_default_strategy())
+
+    for phase in PHASE_KEYS:
+      self.assertIn(f"phases.{phase}.upgradeAllocation", genome.genes)
+      for upgrade_name in TECH_UPGRADE_NAMES:
+        counter_key = f"phases.{phase}.upgrades.{upgrade_name}.counterWeight"
+        max_level_key = f"phases.{phase}.upgrades.{upgrade_name}.maxLevel"
+
+        self.assertIn(counter_key, genome.genes)
+        self.assertIn(max_level_key, genome.genes)
+        self.assertEqual(0.0, GENE_METADATA[counter_key].minimum)
+        self.assertEqual(1.0, GENE_METADATA[counter_key].maximum)
+        self.assertEqual(0, GENE_METADATA[max_level_key].minimum)
+        self.assertEqual(30, GENE_METADATA[max_level_key].maximum)
 
   def test_repair_rules_reference_known_genes(self):
     known_genes = set(GENE_METADATA)

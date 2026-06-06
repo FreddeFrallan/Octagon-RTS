@@ -98,12 +98,21 @@
       "buildOrder": [
         {
           "type": "combat"
+        },
+        {
+          "unitType": "mech",
+          "targetCount": 8
         }
       ],
       "upgrades": [
         {
           "targetUnit": "mech",
           "targetProperty": "maxHp",
+          "selection": "lowest_level_then_cost"
+        },
+        {
+          "targetUnit": "mech",
+          "targetProperty": "attack",
           "selection": "lowest_level_then_cost"
         }
       ]

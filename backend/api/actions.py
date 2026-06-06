@@ -6,7 +6,7 @@ from hex_grid import get_hex_distance, get_neighbors
 from state import ROOMS, state_lock
 
 
-def handle_action(data):
+def handle_action(data, now_ms=None):
   room_id = data.get("roomId")
   player_id = data.get("playerId")
   action_type = data.get("action")
@@ -20,28 +20,30 @@ def handle_action(data):
     if room.status != "playing":
       return None, "Game not running"
 
-    if action_type == "move":
-      success, error_msg = move_units(room, player_id, args)
-    elif action_type == "build":
-      success, error_msg = build_unit(room, player_id, args)
-    elif action_type == "buildTower":
-      success, error_msg = build_power_tower(room, player_id, args)
-    elif action_type == "upgrade":
-      success, error_msg = buy_upgrade(room, player_id, args)
-    elif action_type == "attack":
-      success, error_msg = set_artillery_target(room, player_id, args)
-    elif action_type == "stop":
-      success, error_msg = stop_artillery(room, player_id, args)
-    else:
-      success = False
-      error_msg = "Unknown action error"
+    success, error_msg = apply_action(room, player_id, action_type, args, now_ms=now_ms)
 
   if success:
     return {"success": True}, None
   return None, error_msg or "Unknown action error"
 
 
-def move_units(room, player_id, args):
+def apply_action(room, player_id, action_type, args, now_ms=None):
+  if action_type == "move":
+    return move_units(room, player_id, args, now_ms=now_ms)
+  if action_type == "build":
+    return build_unit(room, player_id, args)
+  if action_type == "buildTower":
+    return build_power_tower(room, player_id, args)
+  if action_type == "upgrade":
+    return buy_upgrade(room, player_id, args)
+  if action_type == "attack":
+    return set_artillery_target(room, player_id, args)
+  if action_type == "stop":
+    return stop_artillery(room, player_id, args)
+  return False, "Unknown action error"
+
+
+def move_units(room, player_id, args, now_ms=None):
   unit_ids = args.get("unitIds", [])
   tx = args.get("toX")
   tz = args.get("toZ")
@@ -65,7 +67,8 @@ def move_units(room, player_id, args):
     if not can_enter:
       return False, error_msg
 
-  now_ms = int(time.time() * 1000)
+  if now_ms is None:
+    now_ms = int(time.time() * 1000)
   for uid in unit_ids:
     unit = room.units[uid]
     unit.isMoving = True

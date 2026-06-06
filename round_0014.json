@@ -1,0 +1,112 @@
+{
+  "name": "Python Offensive Bot",
+  "maxActionsPerTick": 7,
+  "unitLimits": {
+    "minWorkers": 0,
+    "maxWorkers": 5,
+    "maxPowerTowers": 3,
+    "basePowerTowers": 1,
+    "defensivePowerTowers": 1,
+    "defensivePowerTowerRadius": 4
+  },
+  "combatBuildOrder": {
+    "openingArtilleryMinMechs": 1,
+    "minArtillery": 0,
+    "minMechsBeforeDefault": 2,
+    "defaultUnit": "mech"
+  },
+  "squads": {
+    "mech": {
+      "minimumUnits": 1
+    },
+    "sneakyArtillery": {
+      "artilleryCount": 1,
+      "mechEscortCount": 3
+    }
+  },
+  "micro": {
+    "mech": {
+      "nearbyEnemyMaxSteps": 4,
+      "baseStandoffDistance": 0,
+      "blockerAdjacentDistance": 2,
+      "avoidEnemyTowers": true
+    },
+    "artillery": {
+      "minRange": 0,
+      "maxRange": 2,
+      "escortDistance": 1,
+      "shellFlightSeconds": 0.8,
+      "combatContextMechDistance": 4,
+      "retreatThreatDistance": 1,
+      "avoidEnemyTowers": false,
+      "enemyPowerTowerPriority": -3
+    },
+    "worker": {
+      "safeResourceEnemyDistance": 0,
+      "resourceEnemyDangerRadius": 0,
+      "resourceEnemyDangerWeight": 1,
+      "resourceTowerDanger": 7,
+      "resourceAdjacentDistance": 1,
+      "avoidEnemyTowers": false
+    },
+    "powerTower": {
+      "combatContextRange": 1,
+      "workerSafeDistance": 2,
+      "basePreferredDistance": 1
+    },
+    "orders": {
+      "moveRepeatSeconds": 0.6,
+      "buildTowerRepeatSeconds": 1.6,
+      "suppressRepeatedAttackTargets": false
+    }
+  },
+  "phases": {
+    "early_game": {
+      "completionCriteria": {
+        "unitCounts": {
+          "worker": 3,
+          "mech": 1,
+          "artillery": 1
+        }
+      },
+      "buildOrder": [
+        {
+          "unitType": "worker",
+          "targetCount": 6
+        },
+        {
+          "unitType": "mech",
+          "targetCount": 3
+        },
+        {
+          "unitType": "artillery",
+          "targetCount": 2
+        }
+      ]
+    },
+    "mid_game": {
+      "completionCriteria": {
+        "basePowerTowers": 0,
+        "passiveIncomeLevel": 0
+      },
+      "basePowerTowers": 1,
+      "passiveIncomeLevel": 0,
+      "reserveForPowerTower": true,
+      "reserveCombatUnit": "mech"
+    },
+    "late_game": {
+      "buildOrder": [
+        {
+          "type": "combat"
+        }
+      ],
+      "upgrades": [
+        {
+          "targetUnit": "mech",
+          "targetProperty": "maxHp",
+          "selection": "lowest_level_then_cost"
+        }
+      ]
+    }
+  }
+}

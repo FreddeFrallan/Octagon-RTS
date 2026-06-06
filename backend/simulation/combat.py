@@ -1,8 +1,19 @@
 import random
 
+from config import UNITS_CONFIG
+from hex_grid import get_hex_distance
+
 
 def is_attack_ready(unit, now_ms):
   return now_ms - unit.lastAttackTime >= unit.attackCooldown
+
+
+def is_unit_in_attack_range(attacker, target):
+  config = UNITS_CONFIG.get(attacker.type, {})
+  min_range = config.get("minRange", 0)
+  max_range = config.get("maxRange", 0)
+  distance = get_hex_distance(attacker.x, attacker.z, target.x, target.z)
+  return min_range <= distance <= max_range
 
 
 def resolve_close_combat(room, now_ms):
@@ -14,12 +25,14 @@ def resolve_close_combat(room, now_ms):
       continue
     if attacker.attack <= 0:
       continue
+    if attacker.type == "artillery":
+      continue
     if not is_attack_ready(attacker, now_ms):
       continue
 
     opponents = [
       unit for unit in room.units.values()
-      if unit.owner != attacker.owner and unit.x == attacker.x and unit.z == attacker.z
+      if unit.owner != attacker.owner and is_unit_in_attack_range(attacker, unit)
     ]
     if not opponents:
       continue

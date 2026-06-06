@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 import argparse
 
+from GeneralStrategy.settings import (
+  DEFAULT_BOT_NAME,
+  DEFAULT_MAX_ACTIONS_PER_TICK,
+  DEFAULT_MAX_WORKERS,
+  DEFAULT_MIN_WORKERS
+)
 from protocol import BotHttpServer
 from strategy import OffensiveBot
 
@@ -21,13 +27,14 @@ def main():
   parser = argparse.ArgumentParser(description="Run the Octagon-RTS offensive Python bot.")
   parser.add_argument("--host", default="127.0.0.1", help="Host/interface to bind. Default: 127.0.0.1")
   parser.add_argument("--port", type=int, default=8789, help="Port to bind. Default: 8789")
-  parser.add_argument("--name", default="Python Offensive Bot", help="Bot name shown in the lobby.")
-  parser.add_argument("--max-actions", type=int, default=8, help="Maximum orders to send per strategy tick. Default: 8")
-  parser.add_argument("--min-workers", type=non_negative_int, default=1, help="Minimum workers to keep before pure attack spending. Default: 1")
-  parser.add_argument("--max-workers", type=non_negative_int, default=5, help="Maximum workers to build. Default: 5")
+  parser.add_argument("--strategy-instance", help="Path to a strategy instance JSON file. Default: StrategyInstances/default.json")
+  parser.add_argument("--name", default=None, help=f"Bot name shown in the lobby. Default from strategy JSON, fallback: {DEFAULT_BOT_NAME}")
+  parser.add_argument("--max-actions", type=int, default=None, help=f"Maximum orders to send per strategy tick. Default from strategy JSON, fallback: {DEFAULT_MAX_ACTIONS_PER_TICK}")
+  parser.add_argument("--min-workers", type=non_negative_int, default=None, help=f"Minimum workers to keep before pure attack spending. Default from strategy JSON, fallback: {DEFAULT_MIN_WORKERS}")
+  parser.add_argument("--max-workers", type=non_negative_int, default=None, help=f"Maximum workers to build. Default from strategy JSON, fallback: {DEFAULT_MAX_WORKERS}")
   parser.add_argument("--quiet", action="store_true", help="Suppress strategy action logs.")
   args = parser.parse_args()
-  if args.max_workers < args.min_workers:
+  if args.max_workers is not None and args.min_workers is not None and args.max_workers < args.min_workers:
     parser.error("--max-workers must be greater than or equal to --min-workers")
 
   bot = OffensiveBot(
@@ -35,9 +42,10 @@ def main():
     max_actions_per_tick=args.max_actions,
     verbose=not args.quiet,
     min_workers=args.min_workers,
-    max_workers=args.max_workers
+    max_workers=args.max_workers,
+    strategy_instance_path=args.strategy_instance
   )
-  print(f"{bot.name} listening on http://{args.host}:{args.port} (workers {args.min_workers}-{args.max_workers}, then attack)")
+  print(f"{bot.name} listening on http://{args.host}:{args.port} (workers {bot.min_workers}-{bot.max_workers}, then attack)")
   BotHttpServer(args.host, args.port, bot).serve_forever()
 
 
